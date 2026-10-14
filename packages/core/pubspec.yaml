@@ -1,0 +1,25 @@
+name: core
+description: Shared core package for Cafe Table & Order Management System
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  vibration: ^2.0.1
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+

@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && (
+        request.auth.token.role == role || 
+        getUserData().role == role
+      );
+    }
+    
+    function isStaff() {
+      return isAuthenticated() && (
+        hasRole('waiter') || 
+        hasRole('counter') || 
+        hasRole('manager')
+      );
+    }
+    
+    function isManager() {
+      return isAuthenticated() && hasRole('manager');
+    }
+
+    // App Configuration: read by all authenticated, write only by manager
+    match /config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() || hasRole('counter');
+    }
+
+    // Users & Point Transactions
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(userId) || isStaff();
+      allow delete: if isManager();
+
+      match /pointTx/{txId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow write: if isStaff();
+      }
+    }
+
+    // Tables & Slots
+    match /tables/{tableId} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+
+      match /slots/{slotId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+    }
+
+    // Menu Items
+    match /menuItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+
+    // Reservations
+    match /reservations/{resId} {
+      allow read: if isAuthenticated() && (
+        isStaff() || 
+        resource.data.customerId == request.auth.uid
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        isStaff() || 
+        resource.data.customerId == request.auth.uid
+      );
+    }
+
+    // Sessions & Orders
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isManager();
+
+      match /orders/{orderId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isStaff();
+        allow delete: if isStaff();
+      }
+    }
+
+    // Orders collectionGroup for Kitchen / POS display
+    match /{path=**}/orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Requests (call_waiter, request_bill, release_table, early_release)
+    match /requests/{reqId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isStaff();
+      allow delete: if isStaff();
+    }
+
+    // Payments
+    match /payments/{payId} {
+      allow read: if isAuthenticated() && (
+        isStaff() || 
+        resource.data.customerId == request.auth.uid
+      );
+      allow create: if isStaff();
+      allow update, delete: if isManager();
+    }
+  }
+}
+
