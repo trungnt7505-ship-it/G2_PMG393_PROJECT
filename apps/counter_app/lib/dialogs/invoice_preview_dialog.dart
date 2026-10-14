@@ -218,3 +218,4 @@ class InvoicePreviewDialog extends StatelessWidget {
     );
   }
 }
+

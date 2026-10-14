@@ -414,3 +414,4 @@ class OrderQueuePanel extends ConsumerWidget {
     );
   }
 }
+

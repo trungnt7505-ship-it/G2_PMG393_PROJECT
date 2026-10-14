@@ -1,22 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:core/core.dart';
+import '../viewmodels/auth_viewmodel.dart';
 import '../screens/counter_auth_screen.dart';
 import '../screens/pos_dashboard_screen.dart';
 import '../screens/manager_admin_screen.dart';
 
 /// Quản lý định tuyến (Routing) cho Counter App bằng GoRouter kết hợp Riverpod.
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authViewModelProvider);
   final currentUserState = ref.watch(currentUserProvider);
 
   return GoRouter(
-    initialLocation: '/pos',
+    initialLocation: '/login',
     redirect: (context, state) {
-      final isLoading = currentUserState.isLoading;
-      final user = currentUserState.value;
+      final user = authState.user ?? currentUserState.value;
       final isLoggingIn = state.matchedLocation == '/login';
-
-      if (isLoading) return null;
 
       // Nếu chưa đăng nhập hoặc không phải nhân viên quầy/quản lý -> chuyển về trang Login
       if (user == null || (user.userRole != UserRole.counter && user.userRole != UserRole.manager)) {

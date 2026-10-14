@@ -239,4 +239,11 @@ class OrderService {
           .toList();
     });
   }
+
+  /// Quản lý bật/tắt trạng thái khả dụng của món trên thực đơn (dành cho Quản lý).
+  Future<void> toggleMenuItemAvailability(String itemId, bool isAvailable) async {
+    await _firestore.collection('menuItems').doc(itemId).update({
+      'available': isAvailable,
+    });
+  }
 }

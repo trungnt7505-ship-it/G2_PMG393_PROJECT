@@ -133,3 +133,4 @@ final posDashboardViewModelProvider =
     orderService: orderService,
   );
 });
+

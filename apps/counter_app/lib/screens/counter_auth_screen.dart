@@ -203,3 +203,4 @@ class _CounterAuthScreenState extends ConsumerState<CounterAuthScreen> {
     );
   }
 }
+

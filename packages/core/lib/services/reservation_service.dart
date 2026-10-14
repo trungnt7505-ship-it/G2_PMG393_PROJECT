@@ -199,4 +199,23 @@ class ReservationService {
           .toList();
     });
   }
+
+  /// Lắng nghe các đơn đặt bàn bị hủy do no-show trong ngày hôm nay.
+  Stream<List<ReservationModel>> watchTodayNoShows() {
+    final now = ClockService.instance.serverNow;
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    return _firestore
+        .collection('reservations')
+        .where('status', isEqualTo: 'no_show')
+        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('startTime', isLessThan: Timestamp.fromDate(endOfDay))
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => ReservationModel.fromMap(doc.data(), doc.id))
+          .toList();
+    });
+  }
 }

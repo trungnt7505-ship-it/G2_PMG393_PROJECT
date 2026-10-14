@@ -277,4 +277,20 @@ class PaymentService {
       return PaymentModel.fromMap(doc.data(), doc.id);
     });
   }
+
+  /// Lắng nghe các hóa đơn thanh toán phát sinh trong ngày hôm nay.
+  Stream<List<PaymentModel>> watchTodayPayments() {
+    final now = ClockService.instance.serverNow;
+    final startOfDay = DateTime(now.year, now.month, now.day);
+
+    return _firestore
+        .collection('payments')
+        .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => PaymentModel.fromMap(doc.data(), doc.id))
+          .toList();
+    });
+  }
 }

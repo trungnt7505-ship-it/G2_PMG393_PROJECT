@@ -4,6 +4,7 @@ import '../constants/app_config.dart';
 import '../constants/enums.dart';
 import '../models/menu_item_model.dart';
 import '../models/order_model.dart';
+import '../models/payment_model.dart';
 import '../models/request_model.dart';
 import '../models/reservation_model.dart';
 import '../models/session_model.dart';
@@ -141,5 +142,15 @@ final menuItemsProvider = StreamProvider<List<MenuItemModel>>((ref) {
         .map((doc) => MenuItemModel.fromMap(doc.data(), doc.id))
         .toList();
   });
+});
+
+/// Stream danh sách hóa đơn thanh toán trong ngày hôm nay.
+final todayPaymentsProvider = StreamProvider<List<PaymentModel>>((ref) {
+  return ref.watch(paymentServiceProvider).watchTodayPayments();
+});
+
+/// Stream danh sách đơn đặt bàn no-show trong ngày hôm nay.
+final todayNoShowsProvider = StreamProvider<List<ReservationModel>>((ref) {
+  return ref.watch(reservationServiceProvider).watchTodayNoShows();
 });
 

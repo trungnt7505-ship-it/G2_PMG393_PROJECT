@@ -213,3 +213,4 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
     }
   }
 }
+

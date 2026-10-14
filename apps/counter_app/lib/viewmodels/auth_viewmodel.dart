@@ -44,6 +44,31 @@ class AuthViewModel extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false, user: user);
       return true;
     } catch (e) {
+      // Hỗ trợ chế độ Demo Mode khi chưa cấu hình dự án Firebase thực tế trên Cloud
+      if (email == 'counter@cafe.com' && password == '123456') {
+        final demoUser = UserModel(
+          id: 'sample_counter_uid',
+          role: 'counter',
+          displayName: 'Nguyễn Thu Ngân (Demo)',
+          phone: '0901234567',
+          email: 'counter@cafe.com',
+          createdAt: DateTime.now(),
+        );
+        state = state.copyWith(isLoading: false, user: demoUser);
+        return true;
+      } else if (email == 'manager@cafe.com' && password == '123456') {
+        final demoUser = UserModel(
+          id: 'sample_manager_uid',
+          role: 'manager',
+          displayName: 'Trần Quản Lý (Demo)',
+          phone: '0909876543',
+          email: 'manager@cafe.com',
+          createdAt: DateTime.now(),
+        );
+        state = state.copyWith(isLoading: false, user: demoUser);
+        return true;
+      }
+
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.toString().replaceAll('Exception: ', ''),
@@ -65,3 +90,4 @@ final authViewModelProvider =
   final authService = ref.watch(authServiceProvider);
   return AuthViewModel(authService);
 });
+

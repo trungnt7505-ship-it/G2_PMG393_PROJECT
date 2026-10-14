@@ -125,9 +125,11 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
                 ),
               );
 
-              if (confirm == true && mounted) {
+              if (confirm == true && context.mounted) {
                 await ref.read(authViewModelProvider.notifier).signOut();
-                if (mounted) context.go('/login');
+                if (context.mounted) {
+                  context.go('/login');
+                }
               }
             },
           ),
@@ -164,3 +166,4 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
     );
   }
 }
+

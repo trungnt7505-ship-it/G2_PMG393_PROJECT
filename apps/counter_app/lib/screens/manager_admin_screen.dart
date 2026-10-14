@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -139,10 +138,9 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
                     value: item.available,
                     activeThumbColor: Colors.green,
                     onChanged: (val) async {
-                      await FirebaseFirestore.instance
-                          .collection('menuItems')
-                          .doc(item.id)
-                          .update({'available': val});
+                      await ref
+                          .read(orderServiceProvider)
+                          .toggleMenuItemAvailability(item.id, val);
                     },
                   ),
                 ],
@@ -230,8 +228,15 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
   // ==========================================
   Widget _buildStatsAndSeedTab() {
     final currencyFmt = NumberFormat('#,###', 'vi_VN');
-    final now = ClockService.instance.serverNow;
-    final startOfDay = DateTime(now.year, now.month, now.day);
+    final paymentsAsync = ref.watch(todayPaymentsProvider);
+    final noShowsAsync = ref.watch(todayNoShowsProvider);
+
+    final payments = paymentsAsync.value ?? [];
+    final totalRevenue = payments.fold<int>(0, (sum, p) => sum + p.total);
+    final invoiceCount = payments.length;
+
+    final noShows = noShowsAsync.value ?? [];
+    final noShowCount = noShows.length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -247,61 +252,33 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('payments')
-                    .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  int totalRevenue = 0;
-                  int invoiceCount = 0;
-
-                  if (snapshot.hasData) {
-                    invoiceCount = snapshot.data!.docs.length;
-                    for (final doc in snapshot.data!.docs) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      totalRevenue += (data['total'] as num?)?.toInt() ?? 0;
-                    }
-                  }
-
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          'Tổng doanh thu hôm nay',
-                          '${currencyFmt.format(totalRevenue)} đ',
-                          Icons.attach_money,
-                          Colors.green,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          'Số lượt hóa đơn',
-                          '$invoiceCount đơn',
-                          Icons.receipt,
-                          Colors.blue,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Tổng doanh thu hôm nay',
+                      '${currencyFmt.format(totalRevenue)} đ',
+                      Icons.attach_money,
+                      Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Số lượt hóa đơn',
+                      '$invoiceCount đơn',
+                      Icons.receipt,
+                      Colors.blue,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('reservations')
-                    .where('status', isEqualTo: 'no_show')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  final noShowCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-                  return _buildStatCard(
-                    'Số lượt khách bỏ bàn (No-show)',
-                    '$noShowCount lượt',
-                    Icons.event_busy,
-                    Colors.red,
-                  );
-                },
+              _buildStatCard(
+                'Số lượt khách bỏ bàn (No-show)',
+                '$noShowCount lượt',
+                Icons.event_busy,
+                Colors.red,
               ),
               const SizedBox(height: 32),
               const Divider(),

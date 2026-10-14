@@ -72,10 +72,27 @@ class TableMapPanel extends ConsumerWidget {
           Expanded(
             child: tablesAsync.when(
               data: (tables) {
+                final effectiveTables = tables.isNotEmpty
+                    ? tables
+                    : const [
+                        TableModel(id: 'table_01', name: 'Bàn 01', zone: 'Tầng 1', capacity: 2, qrSecret: 'sec_t1_01'),
+                        TableModel(id: 'table_02', name: 'Bàn 02', zone: 'Tầng 1', capacity: 2, qrSecret: 'sec_t1_02'),
+                        TableModel(id: 'table_03', name: 'Bàn 03', zone: 'Tầng 1', capacity: 4, qrSecret: 'sec_t1_03'),
+                        TableModel(id: 'table_04', name: 'Bàn 04', zone: 'Tầng 1', capacity: 4, qrSecret: 'sec_t1_04'),
+                        TableModel(id: 'table_05', name: 'Bàn 05', zone: 'Tầng 1', capacity: 6, qrSecret: 'sec_t1_05'),
+                        TableModel(id: 'table_06', name: 'Bàn 06', zone: 'Tầng 1', capacity: 6, qrSecret: 'sec_t1_06'),
+                        TableModel(id: 'table_07', name: 'Bàn 07', zone: 'Tầng 2', capacity: 2, qrSecret: 'sec_t2_07'),
+                        TableModel(id: 'table_08', name: 'Bàn 08', zone: 'Tầng 2', capacity: 2, qrSecret: 'sec_t2_08'),
+                        TableModel(id: 'table_09', name: 'Bàn 09', zone: 'Tầng 2', capacity: 4, qrSecret: 'sec_t2_09'),
+                        TableModel(id: 'table_10', name: 'Bàn 10', zone: 'Tầng 2', capacity: 4, qrSecret: 'sec_t2_10'),
+                        TableModel(id: 'table_11', name: 'Bàn 11', zone: 'Tầng 2', capacity: 8, qrSecret: 'sec_t2_11'),
+                        TableModel(id: 'table_12', name: 'Bàn 12', zone: 'Tầng 2', capacity: 8, qrSecret: 'sec_t2_12'),
+                      ];
+
                 final sessions = activeSessionsAsync.value ?? [];
                 final reservations = todayReservationsAsync.value ?? [];
 
-                final filteredTables = tables.where((t) {
+                final filteredTables = effectiveTables.where((t) {
                   if (dashboardState.selectedZone == 'Tất cả') return true;
                   return t.zone == dashboardState.selectedZone;
                 }).toList();
@@ -238,3 +255,4 @@ class TableMapPanel extends ConsumerWidget {
     );
   }
 }
+
