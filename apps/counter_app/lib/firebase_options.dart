@@ -23,12 +23,12 @@ class DefaultFirebaseOptions {
 
   // Cấu hình Web
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDemoCafeSystemKeyForPRM393Web123',
-    appId: '1:123456789012:web:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'cafe-system-prm393',
-    authDomain: 'cafe-system-prm393.firebaseapp.com',
-    storageBucket: 'cafe-system-prm393.appspot.com',
+    apiKey: 'AIzaSyDC5m684x2DNEZRuniQcQmkP4Oo5K9SHzY',
+    appId: '1:881262711524:web:8dcdb9bf625587859f52f1',
+    messagingSenderId: '881262711524',
+    projectId: 'cafe-73637',
+    authDomain: 'cafe-73637.firebaseapp.com',
+    storageBucket: 'cafe-73637.firebasestorage.app',
   );
 
   // Cấu hình Android

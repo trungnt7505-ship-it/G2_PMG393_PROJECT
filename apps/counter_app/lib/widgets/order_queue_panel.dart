@@ -18,7 +18,7 @@ class OrderQueuePanel extends ConsumerWidget {
 
     // Lắng nghe tất cả các đơn hàng chưa hoàn tất phục vụ
     final ordersAsync = ref.watch(
-      ordersByStatusesProvider([
+      ordersByStatusesProvider(const [
         OrderStatus.pending,
         OrderStatus.confirmed,
         OrderStatus.preparing,
