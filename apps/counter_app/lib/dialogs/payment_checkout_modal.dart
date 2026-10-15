@@ -34,6 +34,7 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
   bool _isSearchingMember = false;
   bool _isSubmitting = false;
   String? _errorMessage;
+  int _memberLookupVersion = 0;
 
   @override
   void initState() {
@@ -53,35 +54,58 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
   }
 
   Future<void> _loadCustomerById(String uid) async {
-    // Tra cứu thông tin người dùng từ Auth Service
-    ref.read(currentUserProvider).whenData((user) {
-      if (user != null && user.id == uid) {
-        setState(() => _member = user);
-      }
+    final version = ++_memberLookupVersion;
+    setState(() {
+      _isSearchingMember = true;
+      _errorMessage = null;
+      _member = null;
+      _pointsController.text = '0';
     });
+    try {
+      final customer = await ref.read(authServiceProvider).findCustomerById(uid);
+      if (!mounted || version != _memberLookupVersion) return;
+      setState(() {
+        _member = customer;
+        _isSearchingMember = false;
+        if (customer == null) {
+          _errorMessage = 'Không tìm thấy thành viên hợp lệ với mã QR này.';
+        }
+      });
+    } catch (e) {
+      if (!mounted || version != _memberLookupVersion) return;
+      setState(() {
+        _isSearchingMember = false;
+        _errorMessage = 'Lỗi tra cứu thành viên: $e';
+      });
+    }
   }
 
   Future<void> _searchMemberByPhone() async {
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) return;
+    final version = ++_memberLookupVersion;
 
     setState(() {
       _isSearchingMember = true;
       _errorMessage = null;
+      _member = null;
+      _pointsController.text = '0';
     });
 
     try {
       final authService = ref.read(authServiceProvider);
       final customer = await authService.findCustomerByPhone(phone);
+      if (!mounted || version != _memberLookupVersion) return;
       setState(() {
         _isSearchingMember = false;
-        if (customer != null) {
+        if (customer != null && customer.userRole == UserRole.customer) {
           _member = customer;
         } else {
           _errorMessage = 'Không tìm thấy khách hàng với số điện thoại $phone.';
         }
       });
     } catch (e) {
+      if (!mounted || version != _memberLookupVersion) return;
       setState(() {
         _isSearchingMember = false;
         _errorMessage = 'Lỗi tìm kiếm: $e';
@@ -469,7 +493,9 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
               // Nút hoàn tất thanh toán
               ElevatedButton.icon(
                 key: const Key('confirm_payment_button'),
-                onPressed: _isSubmitting ? null : () => _submitPayment(calc),
+                onPressed: _isSubmitting || _isSearchingMember
+                    ? null
+                    : () => _submitPayment(calc),
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 20,

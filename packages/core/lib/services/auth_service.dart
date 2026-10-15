@@ -123,6 +123,15 @@ class AuthService {
     await _auth.signOut();
   }
 
+  /// Tra cứu thành viên theo UID từ QR; không nhận tài khoản nhân viên.
+  Future<UserModel?> findCustomerById(String uid) async {
+    if (uid.trim().isEmpty || uid.contains('/')) return null;
+    final doc = await _firestore.collection('users').doc(uid.trim()).get();
+    if (!doc.exists || doc.data() == null) return null;
+    final user = UserModel.fromMap(doc.data()!, doc.id);
+    return user.userRole == UserRole.customer ? user : null;
+  }
+
   /// Tìm kiếm thông tin khách hàng dựa theo số điện thoại (dành cho Quầy thu ngân).
   Future<UserModel?> findCustomerByPhone(String phone) async {
     final query = await _firestore
