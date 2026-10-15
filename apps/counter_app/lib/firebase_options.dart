@@ -32,14 +32,14 @@ class DefaultFirebaseOptions {
   );
 
   // Cấu hình Android
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDemoCafeSystemKeyForPRM393Android',
-    appId: '1:123456789012:android:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'cafe-system-prm393',
-    storageBucket: 'cafe-system-prm393.appspot.com',
-  );
 
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyChHovxhhvvrdYUyNJQBnw1UV9G_1O8_GA',
+    appId: '1:881262711524:android:c651fe03c0af3ba09f52f1',
+    messagingSenderId: '881262711524',
+    projectId: 'cafe-73637',
+    storageBucket: 'cafe-73637.firebasestorage.app',
+  );
   // Cấu hình Windows
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyDemoCafeSystemKeyForPRM393Win123',
