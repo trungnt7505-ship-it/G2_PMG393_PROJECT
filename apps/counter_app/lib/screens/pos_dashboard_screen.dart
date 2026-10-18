@@ -30,7 +30,9 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
     // Bật timer định kỳ 2 giây quét cảnh báo đa bàn qua AlarmService
     _tickTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       final activeSessions = ref.read(activeSessionsProvider).value ?? [];
-      AlarmService.instance.onTickCheck(activeSessions);
+      final config =
+          ref.read(appConfigProvider).valueOrNull ?? AppConfig.defaultConfig;
+      AlarmService.instance.onTickCheck(activeSessions, config: config);
     });
   }
 
@@ -60,7 +62,8 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
             const SizedBox(width: 16),
             if (user != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white24,
                   borderRadius: BorderRadius.circular(12),
@@ -97,7 +100,8 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
             TextButton.icon(
               onPressed: () => context.push('/admin'),
               icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
-              label: const Text('Quản lý', style: TextStyle(color: Colors.white)),
+              label:
+                  const Text('Quản lý', style: TextStyle(color: Colors.white)),
             ),
             const SizedBox(width: 8),
           ],
@@ -111,7 +115,8 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Xác nhận đăng xuất'),
-                  content: const Text('Bạn có chắc chắn muốn đăng xuất khỏi POS?'),
+                  content:
+                      const Text('Bạn có chắc chắn muốn đăng xuất khỏi POS?'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(ctx).pop(false),
@@ -166,4 +171,3 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
     );
   }
 }
-

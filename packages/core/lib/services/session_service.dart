@@ -8,15 +8,32 @@ import '../models/reservation_model.dart';
 import '../models/session_model.dart';
 import '../models/table_model.dart';
 import 'clock_service.dart';
+import 'config_service.dart';
 
 /// Dịch vụ quản lý vòng đời của phiên dùng bàn (Session), chuyển bàn, gia hạn
 /// và đồng bộ trạng thái hiển thị của sơ đồ bàn.
 class SessionService {
-  final FirebaseFirestore? _customFirestore;
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  /// Phiên bắt đầu trong ngày theo đồng hồ server, gồm cả phiên đã thanh toán.
+  Stream<List<SessionModel>> watchTodaySessions() {
+    final now = ClockService.instance.serverNow;
+    final start = DateTime(now.year, now.month, now.day);
+    return _firestore
+        .collection('sessions')
+        .where('startedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('startedAt',
+            isLessThan: Timestamp.fromDate(start.add(const Duration(days: 1))))
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .where((doc) => doc.id != 'takeaway_orders')
+            .map((doc) => SessionModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
 
-  SessionService({FirebaseFirestore? firestore})
-      : _customFirestore = firestore;
+  final FirebaseFirestore? _customFirestore;
+  FirebaseFirestore get _firestore =>
+      _customFirestore ?? FirebaseFirestore.instance;
+
+  SessionService({FirebaseFirestore? firestore}) : _customFirestore = firestore;
 
   /// Tính toán trạng thái hiển thị giao diện của bàn theo thời gian thực (Client-computed).
   ///
@@ -33,8 +50,9 @@ class SessionService {
     TableModel table,
     SessionModel? activeSession,
     ReservationModel? nextRes,
-    DateTime now,
-  ) {
+    DateTime now, {
+    AppConfig config = AppConfig.defaultConfig,
+  }) {
     if (table.physicalStatus == TablePhysicalStatus.needs_cleaning) {
       return TableDisplayStatus.cleaning;
     }
@@ -43,18 +61,22 @@ class SessionService {
       if (now.isAfter(activeSession.expiresAt)) {
         return TableDisplayStatus.overtime;
       }
-      final remainingMinutes = activeSession.expiresAt.difference(now).inMinutes;
-      if (remainingMinutes <= 15) {
+      final remainingMinutes =
+          activeSession.expiresAt.difference(now).inMinutes;
+      if (remainingMinutes <= config.warnMinutes.reduce(max)) {
         return TableDisplayStatus.expiring;
       }
       return TableDisplayStatus.using;
     }
 
-    if (nextRes != null && nextRes.reservationStatus == ReservationStatus.confirmed) {
+    if (nextRes != null &&
+        nextRes.reservationStatus == ReservationStatus.confirmed) {
       final isBeforeHoldUntil = now.isBefore(nextRes.holdUntil);
       final differenceMinutes = nextRes.startTime.difference(now).inMinutes;
       // Khách sắp đến trong vòng 30 phút tới và chưa bị quá giờ giữ chỗ
-      if (isBeforeHoldUntil && differenceMinutes <= 30 && differenceMinutes >= -15) {
+      if (isBeforeHoldUntil &&
+          differenceMinutes <= 30 &&
+          differenceMinutes >= -15) {
         return TableDisplayStatus.reservedSoon;
       }
     }
@@ -84,6 +106,8 @@ class SessionService {
     final now = ClockService.instance.serverNow;
 
     return await _firestore.runTransaction<String>((transaction) async {
+      final config = await ConfigService(firestore: _firestore)
+          .read(transaction: transaction);
       final tableRef = _firestore.collection('tables').doc(tableId);
       final tableSnapshot = await transaction.get(tableRef);
 
@@ -98,7 +122,7 @@ class SessionService {
         );
       }
 
-      int baseMinutes = AppConfig.defaultConfig.sessionMinutes; // 120 phút mặc định
+      int baseMinutes = config.sessionMinutes; // 120 phút mặc định
 
       // Kiểm tra slot đặt trước tiếp theo của bàn để cắt thời gian nếu cần
       final slotsQuery = await _firestore
@@ -117,11 +141,13 @@ class SessionService {
         if (nextSlotResId != null && nextSlotResId != reservationId) {
           final nextSlotStart = (nextSlot['resStart'] as Timestamp).toDate();
           final minutesUntilNext = nextSlotStart.difference(now).inMinutes;
-          final availableMinutes = minutesUntilNext - AppConfig.defaultConfig.bufferMinutes;
+          final availableMinutes = minutesUntilNext - config.bufferMinutes;
 
-          if (availableMinutes > 15 && availableMinutes < baseMinutes) {
-            baseMinutes = availableMinutes;
+          if (availableMinutes < 10) {
+            throw StateError(
+                'Không đủ thời gian mở bàn trước lượt đặt tiếp theo.');
           }
+          baseMinutes = min(baseMinutes, availableMinutes);
         }
       }
 
@@ -134,11 +160,22 @@ class SessionService {
         final resRef = _firestore.collection('reservations').doc(reservationId);
         final resSnapshot = await transaction.get(resRef);
         if (resSnapshot.exists && resSnapshot.data() != null) {
-          reservation = ReservationModel.fromMap(resSnapshot.data()!, resSnapshot.id);
+          reservation =
+              ReservationModel.fromMap(resSnapshot.data()!, resSnapshot.id);
+          if (reservation.reservationStatus != ReservationStatus.confirmed ||
+              reservation.tableId != tableId ||
+              now.isBefore(reservation.startTime
+                  .subtract(Duration(minutes: config.checkInEarlyMinutes))) ||
+              now.isAfter(reservation.holdUntil)) {
+            throw StateError(
+                'Đặt bàn không hợp lệ hoặc chưa đến/đã quá thời gian nhận bàn.');
+          }
           transaction.update(resRef, {
             'status': ReservationStatus.checked_in.name,
             'sessionId': sessionId,
           });
+        } else {
+          throw StateError('Không tìm thấy đặt bàn để nhận bàn.');
         }
       }
 
@@ -148,7 +185,8 @@ class SessionService {
       if (reservation != null && reservation.hasPreOrder) {
         final orderRef = sessionRef.collection('orders').doc();
         final isStaff = openedByRole != 'customer';
-        final orderStatus = isStaff ? OrderStatus.confirmed.name : OrderStatus.pending.name;
+        final orderStatus =
+            isStaff ? OrderStatus.confirmed.name : OrderStatus.pending.name;
         final total = reservation.preOrderTotal;
 
         final firstOrder = OrderModel(
@@ -178,7 +216,9 @@ class SessionService {
         tableId: table.id,
         tableName: table.name,
         customerId: customerId ?? reservation?.customerId,
-        customerName: customerId != null ? customerName : (reservation?.customerName ?? customerName),
+        customerName: customerId != null
+            ? customerName
+            : (reservation?.customerName ?? customerName),
         guestPhone: reservation?.phone,
         openedBy: openedBy,
         openedByRole: openedByRole,
@@ -217,7 +257,8 @@ class SessionService {
       throw Exception('Mã QR không đúng định dạng bàn của quán Cafe.');
     }
 
-    final tableId = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : uri.path;
+    final tableId =
+        uri.pathSegments.isNotEmpty ? uri.pathSegments.first : uri.path;
     final secretKey = uri.queryParameters['k'];
 
     if (tableId.isEmpty || secretKey == null) {
@@ -236,7 +277,8 @@ class SessionService {
 
     // Lấy tên khách hàng
     final userDoc = await _firestore.collection('users').doc(customerId).get();
-    final customerName = userDoc.data()?['displayName'] as String? ?? 'Khách hàng';
+    final customerName =
+        userDoc.data()?['displayName'] as String? ?? 'Khách hàng';
 
     return await openSession(
       tableId: tableId,
@@ -260,7 +302,8 @@ class SessionService {
       throw Exception('Mã QR không đúng định dạng đơn đặt trước.');
     }
 
-    final resId = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : uri.path;
+    final resId =
+        uri.pathSegments.isNotEmpty ? uri.pathSegments.first : uri.path;
     if (resId.isEmpty) {
       throw Exception('Mã QR không chứa mã đơn đặt trước.');
     }
@@ -293,6 +336,8 @@ class SessionService {
     final now = ClockService.instance.serverNow;
 
     return await _firestore.runTransaction<int>((transaction) async {
+      final config = await ConfigService(firestore: _firestore)
+          .read(transaction: transaction);
       final sessionRef = _firestore.collection('sessions').doc(sessionId);
       final sessionSnapshot = await transaction.get(sessionRef);
 
@@ -300,19 +345,21 @@ class SessionService {
         throw Exception('Không tìm thấy phiên dùng bàn.');
       }
 
-      final session = SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
+      final session =
+          SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
       if (!session.isActive) {
         throw Exception('Phiên dùng bàn đã kết thúc, không thể gia hạn.');
       }
 
-      int minutesToAdd = AppConfig.defaultConfig.extendStepMinutes; // 30 phút
+      int minutesToAdd = config.extendStepMinutes; // 30 phút
 
       // Kiểm tra slot đặt tiếp theo sau thời điểm hết hạn hiện tại
       final nextSlots = await _firestore
           .collection('tables')
           .doc(session.tableId)
           .collection('slots')
-          .where('resStart', isGreaterThanOrEqualTo: Timestamp.fromDate(session.expiresAt))
+          .where('resStart',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(session.expiresAt))
           .orderBy('resStart')
           .limit(1)
           .get();
@@ -320,8 +367,9 @@ class SessionService {
       if (nextSlots.docs.isNotEmpty) {
         final nextSlot = nextSlots.docs.first.data();
         final nextStart = (nextSlot['resStart'] as Timestamp).toDate();
-        final maxExtendMinutes = nextStart.difference(session.expiresAt).inMinutes -
-            AppConfig.defaultConfig.bufferMinutes;
+        final maxExtendMinutes =
+            nextStart.difference(session.expiresAt).inMinutes -
+                config.bufferMinutes;
 
         if (maxExtendMinutes < 10) {
           throw Exception(
@@ -332,7 +380,8 @@ class SessionService {
         minutesToAdd = min(minutesToAdd, maxExtendMinutes);
       }
 
-      final newExpiresAt = session.expiresAt.add(Duration(minutes: minutesToAdd));
+      final newExpiresAt =
+          session.expiresAt.add(Duration(minutes: minutesToAdd));
       final updatedExtensions = List<SessionExtension>.from(session.extensions)
         ..add(SessionExtension(at: now, minutes: minutesToAdd, by: byUid));
 
@@ -354,44 +403,50 @@ class SessionService {
   }) async {
     final now = ClockService.instance.serverNow;
     final sessionRef = _firestore.collection('sessions').doc(sessionId);
-    final sessionDoc = await sessionRef.get();
+    return _firestore.runTransaction((transaction) async {
+      final config = await ConfigService(firestore: _firestore)
+          .read(transaction: transaction);
+      final sessionDoc = await transaction.get(sessionRef);
 
-    if (!sessionDoc.exists || sessionDoc.data() == null) {
-      throw Exception('Không tìm thấy phiên bàn.');
-    }
+      if (!sessionDoc.exists || sessionDoc.data() == null) {
+        throw Exception('Không tìm thấy phiên bàn.');
+      }
 
-    final session = SessionModel.fromMap(sessionDoc.data()!, sessionDoc.id);
-    final remainingMinutes = session.expiresAt.difference(now).inMinutes;
+      final session = SessionModel.fromMap(sessionDoc.data()!, sessionDoc.id);
+      if (!session.isActive || session.customerId != customerId) {
+        throw StateError('Không thể yêu cầu trả sớm cho phiên này.');
+      }
+      final remainingMinutes = session.expiresAt.difference(now).inMinutes;
 
-    if (remainingMinutes < AppConfig.defaultConfig.earlyReleaseMinMinutes) {
-      throw Exception(
-        'Thời gian còn lại của phiên dưới ${AppConfig.defaultConfig.earlyReleaseMinMinutes} phút, '
-        'không đủ điều kiện nhận điểm thưởng trả bàn sớm.',
+      if (remainingMinutes < config.earlyReleaseMinMinutes) {
+        throw Exception(
+          'Thời gian còn lại của phiên dưới ${config.earlyReleaseMinMinutes} phút, '
+          'không đủ điều kiện nhận điểm thưởng trả bàn sớm.',
+        );
+      }
+
+      transaction.update(sessionRef, {
+        'earlyReleased': true,
+        'status': SessionStatus.billing.name,
+      });
+
+      // Tạo Request cho nhân viên và quầy
+      final reqRef = _firestore.collection('requests').doc();
+      final request = RequestModel(
+        id: reqRef.id,
+        sessionId: sessionId,
+        tableId: session.tableId,
+        tableName: session.tableName,
+        type: RequestType.early_release.name,
+        message:
+            'Khách yêu cầu trả bàn sớm khi còn $remainingMinutes phút để nhận điểm thưởng.',
+        status: 'open',
+        createdBy: customerId,
+        createdAt: now,
       );
-    }
 
-    final batch = _firestore.batch();
-    batch.update(sessionRef, {
-      'earlyReleased': true,
-      'status': SessionStatus.billing.name,
+      transaction.set(reqRef, request.toMap());
     });
-
-    // Tạo Request cho nhân viên và quầy
-    final reqRef = _firestore.collection('requests').doc();
-    final request = RequestModel(
-      id: reqRef.id,
-      sessionId: sessionId,
-      tableId: session.tableId,
-      tableName: session.tableName,
-      type: RequestType.early_release.name,
-      message: 'Khách yêu cầu trả bàn sớm khi còn $remainingMinutes phút để nhận điểm thưởng.',
-      status: 'open',
-      createdBy: customerId,
-      createdAt: now,
-    );
-
-    batch.set(reqRef, request.toMap());
-    await batch.commit();
   }
 
   /// Chuyển khách sang bàn mới trong trường hợp khách muốn đổi chỗ.
@@ -411,11 +466,14 @@ class SessionService {
         throw Exception('Thông tin phiên hoặc bàn mới không tồn tại.');
       }
 
-      final session = SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
-      final newTable = TableModel.fromMap(newTableSnapshot.data()!, newTableSnapshot.id);
+      final session =
+          SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
+      final newTable =
+          TableModel.fromMap(newTableSnapshot.data()!, newTableSnapshot.id);
 
       if (newTable.physicalStatus != TablePhysicalStatus.available) {
-        throw Exception('Bàn mới "${newTable.name}" hiện không còn trống để chuyển sang.');
+        throw Exception(
+            'Bàn mới "${newTable.name}" hiện không còn trống để chuyển sang.');
       }
 
       final oldTableRef = _firestore.collection('tables').doc(session.tableId);
@@ -452,7 +510,8 @@ class SessionService {
         throw Exception('Không tìm thấy phiên cần hủy.');
       }
 
-      final session = SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
+      final session =
+          SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
       final tableRef = _firestore.collection('tables').doc(session.tableId);
 
       transaction.update(sessionRef, {
@@ -510,7 +569,11 @@ class SessionService {
 
   /// Lắng nghe thông tin phiên bàn hiện tại theo thời gian thực.
   Stream<SessionModel?> watchSession(String sessionId) {
-    return _firestore.collection('sessions').doc(sessionId).snapshots().map((doc) {
+    return _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .snapshots()
+        .map((doc) {
       if (!doc.exists || doc.data() == null) return null;
       return SessionModel.fromMap(doc.data()!, doc.id);
     });
@@ -520,18 +583,23 @@ class SessionService {
   Stream<List<SessionModel>> watchActiveSessions() {
     return _firestore
         .collection('sessions')
-        .where('status', whereIn: [SessionStatus.active.name, SessionStatus.billing.name])
+        .where('status',
+            whereIn: [SessionStatus.active.name, SessionStatus.billing.name])
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => SessionModel.fromMap(doc.data(), doc.id))
-          .toList();
-    });
+          return snapshot.docs
+              .map((doc) => SessionModel.fromMap(doc.data(), doc.id))
+              .toList();
+        });
   }
 
   /// Lắng nghe danh sách tất cả các bàn trong quán.
   Stream<List<TableModel>> watchAllTables() {
-    return _firestore.collection('tables').orderBy('name').snapshots().map((snapshot) {
+    return _firestore
+        .collection('tables')
+        .orderBy('name')
+        .snapshots()
+        .map((snapshot) {
       return snapshot.docs
           .map((doc) => TableModel.fromMap(doc.data(), doc.id))
           .toList();

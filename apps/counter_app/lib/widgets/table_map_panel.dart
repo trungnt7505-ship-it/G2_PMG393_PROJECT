@@ -13,9 +13,12 @@ class TableMapPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tablesAsync = ref.watch(allTablesProvider);
     final activeSessionsAsync = ref.watch(activeSessionsProvider);
-    final todayReservationsAsync = ref.watch(todayConfirmedReservationsProvider);
+    final todayReservationsAsync =
+        ref.watch(todayConfirmedReservationsProvider);
     final dashboardState = ref.watch(posDashboardViewModelProvider);
     final sessionService = ref.watch(sessionServiceProvider);
+    final config =
+        ref.watch(appConfigProvider).valueOrNull ?? AppConfig.defaultConfig;
     final now = ClockService.instance.serverNow;
 
     return Container(
@@ -38,7 +41,8 @@ class TableMapPanel extends ConsumerWidget {
                     SizedBox(width: 8),
                     Text(
                       'Sơ đồ Bàn',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -75,18 +79,78 @@ class TableMapPanel extends ConsumerWidget {
                 final effectiveTables = tables.isNotEmpty
                     ? tables
                     : const [
-                        TableModel(id: 'table_01', name: 'Bàn 01', zone: 'Tầng 1', capacity: 2, qrSecret: 'sec_t1_01'),
-                        TableModel(id: 'table_02', name: 'Bàn 02', zone: 'Tầng 1', capacity: 2, qrSecret: 'sec_t1_02'),
-                        TableModel(id: 'table_03', name: 'Bàn 03', zone: 'Tầng 1', capacity: 4, qrSecret: 'sec_t1_03'),
-                        TableModel(id: 'table_04', name: 'Bàn 04', zone: 'Tầng 1', capacity: 4, qrSecret: 'sec_t1_04'),
-                        TableModel(id: 'table_05', name: 'Bàn 05', zone: 'Tầng 1', capacity: 6, qrSecret: 'sec_t1_05'),
-                        TableModel(id: 'table_06', name: 'Bàn 06', zone: 'Tầng 1', capacity: 6, qrSecret: 'sec_t1_06'),
-                        TableModel(id: 'table_07', name: 'Bàn 07', zone: 'Tầng 2', capacity: 2, qrSecret: 'sec_t2_07'),
-                        TableModel(id: 'table_08', name: 'Bàn 08', zone: 'Tầng 2', capacity: 2, qrSecret: 'sec_t2_08'),
-                        TableModel(id: 'table_09', name: 'Bàn 09', zone: 'Tầng 2', capacity: 4, qrSecret: 'sec_t2_09'),
-                        TableModel(id: 'table_10', name: 'Bàn 10', zone: 'Tầng 2', capacity: 4, qrSecret: 'sec_t2_10'),
-                        TableModel(id: 'table_11', name: 'Bàn 11', zone: 'Tầng 2', capacity: 8, qrSecret: 'sec_t2_11'),
-                        TableModel(id: 'table_12', name: 'Bàn 12', zone: 'Tầng 2', capacity: 8, qrSecret: 'sec_t2_12'),
+                        TableModel(
+                            id: 'table_01',
+                            name: 'Bàn 01',
+                            zone: 'Tầng 1',
+                            capacity: 2,
+                            qrSecret: 'sec_t1_01'),
+                        TableModel(
+                            id: 'table_02',
+                            name: 'Bàn 02',
+                            zone: 'Tầng 1',
+                            capacity: 2,
+                            qrSecret: 'sec_t1_02'),
+                        TableModel(
+                            id: 'table_03',
+                            name: 'Bàn 03',
+                            zone: 'Tầng 1',
+                            capacity: 4,
+                            qrSecret: 'sec_t1_03'),
+                        TableModel(
+                            id: 'table_04',
+                            name: 'Bàn 04',
+                            zone: 'Tầng 1',
+                            capacity: 4,
+                            qrSecret: 'sec_t1_04'),
+                        TableModel(
+                            id: 'table_05',
+                            name: 'Bàn 05',
+                            zone: 'Tầng 1',
+                            capacity: 6,
+                            qrSecret: 'sec_t1_05'),
+                        TableModel(
+                            id: 'table_06',
+                            name: 'Bàn 06',
+                            zone: 'Tầng 1',
+                            capacity: 6,
+                            qrSecret: 'sec_t1_06'),
+                        TableModel(
+                            id: 'table_07',
+                            name: 'Bàn 07',
+                            zone: 'Tầng 2',
+                            capacity: 2,
+                            qrSecret: 'sec_t2_07'),
+                        TableModel(
+                            id: 'table_08',
+                            name: 'Bàn 08',
+                            zone: 'Tầng 2',
+                            capacity: 2,
+                            qrSecret: 'sec_t2_08'),
+                        TableModel(
+                            id: 'table_09',
+                            name: 'Bàn 09',
+                            zone: 'Tầng 2',
+                            capacity: 4,
+                            qrSecret: 'sec_t2_09'),
+                        TableModel(
+                            id: 'table_10',
+                            name: 'Bàn 10',
+                            zone: 'Tầng 2',
+                            capacity: 4,
+                            qrSecret: 'sec_t2_10'),
+                        TableModel(
+                            id: 'table_11',
+                            name: 'Bàn 11',
+                            zone: 'Tầng 2',
+                            capacity: 8,
+                            qrSecret: 'sec_t2_11'),
+                        TableModel(
+                            id: 'table_12',
+                            name: 'Bàn 12',
+                            zone: 'Tầng 2',
+                            capacity: 8,
+                            qrSecret: 'sec_t2_12'),
                       ];
 
                 final sessions = activeSessionsAsync.value ?? [];
@@ -98,7 +162,8 @@ class TableMapPanel extends ConsumerWidget {
                 }).toList();
 
                 if (filteredTables.isEmpty) {
-                  return const Center(child: Text('Không có bàn nào trong khu vực này.'));
+                  return const Center(
+                      child: Text('Không có bàn nào trong khu vực này.'));
                 }
 
                 return GridView.builder(
@@ -112,24 +177,28 @@ class TableMapPanel extends ConsumerWidget {
                   itemCount: filteredTables.length,
                   itemBuilder: (context, index) {
                     final table = filteredTables[index];
-                    final activeSession = sessions.cast<SessionModel?>().firstWhere(
-                          (s) => s?.tableId == table.id && s!.isActive,
-                          orElse: () => null,
-                        );
+                    final activeSession =
+                        sessions.cast<SessionModel?>().firstWhere(
+                              (s) => s?.tableId == table.id && s!.isActive,
+                              orElse: () => null,
+                            );
 
-                    final nextRes = reservations.cast<ReservationModel?>().firstWhere(
-                          (r) => r?.tableId == table.id,
-                          orElse: () => null,
-                        );
+                    final nextRes =
+                        reservations.cast<ReservationModel?>().firstWhere(
+                              (r) => r?.tableId == table.id,
+                              orElse: () => null,
+                            );
 
                     final displayStatus = sessionService.computeDisplayStatus(
                       table,
                       activeSession,
                       nextRes,
                       now,
+                      config: config,
                     );
 
-                    final isSelected = dashboardState.selectedTableId == table.id;
+                    final isSelected =
+                        dashboardState.selectedTableId == table.id;
                     final statusColor = AppColors.getStatusColor(displayStatus);
                     final isBilling = activeSession?.status == 'billing';
 
@@ -148,7 +217,9 @@ class TableMapPanel extends ConsumerWidget {
                               : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isSelected ? AppColors.primaryDark : statusColor,
+                            color: isSelected
+                                ? AppColors.primaryDark
+                                : statusColor,
                             width: isSelected ? 3 : 1.5,
                           ),
                           boxShadow: [
@@ -209,7 +280,8 @@ class TableMapPanel extends ConsumerWidget {
                                 child: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.payment, size: 14, color: Colors.red),
+                                    Icon(Icons.payment,
+                                        size: 14, color: Colors.red),
                                     SizedBox(width: 4),
                                     Text(
                                       'Chờ thanh toán',
@@ -255,4 +327,3 @@ class TableMapPanel extends ConsumerWidget {
     );
   }
 }
-

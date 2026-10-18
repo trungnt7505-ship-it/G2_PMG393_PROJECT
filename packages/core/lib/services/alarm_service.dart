@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 import '../models/session_model.dart';
+import '../constants/app_config.dart';
 import 'clock_service.dart';
 
 /// Dịch vụ quản lý cảnh báo giờ hết hạn phiên bàn (Rung Haptic & Local Notifications).
@@ -25,7 +26,8 @@ class AlarmService {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwinSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -43,56 +45,39 @@ class AlarmService {
 
   /// Kiểm tra các mốc cảnh báo (15 phút, 5 phút, 0 phút) cho một phiên bàn đơn lẻ.
   /// Thường được gọi bởi ứng dụng Khách hàng (`customer_app`) khi theo dõi bàn của mình.
-  Future<void> syncAlarmsForSession(SessionModel s) async {
+  Future<void> syncAlarmsForSession(SessionModel s,
+      {AppConfig config = AppConfig.defaultConfig}) async {
     if (!s.isActive) return;
-
-    final now = ClockService.instance.serverNow;
-    final remainingMinutes = s.expiresAt.difference(now).inMinutes;
-
-    firedBySession.putIfAbsent(s.id, () => <int>{});
-    final firedSet = firedBySession[s.id]!;
-
-    if (remainingMinutes <= 0) {
-      if (!firedSet.contains(0)) {
-        firedSet.add(0);
-        await _triggerAlarm(
-          sessionId: s.id,
-          tableName: s.tableName,
-          minutesLeft: 0,
-          title: 'Hết giờ dùng bàn!',
-          body: '${s.tableName} đã hết thời lượng 120 phút. Vui lòng thanh toán hoặc yêu cầu nhân viên hỗ trợ.',
-        );
-      }
-    } else if (remainingMinutes <= 5) {
-      if (!firedSet.contains(5)) {
-        firedSet.add(5);
-        await _triggerAlarm(
-          sessionId: s.id,
-          tableName: s.tableName,
-          minutesLeft: 5,
-          title: 'Cảnh báo: Còn 5 phút!',
-          body: '${s.tableName} chỉ còn 5 phút trước khi kết thúc phiên. Bạn có thể bấm Gia hạn ngay.',
-        );
-      }
-    } else if (remainingMinutes <= 15) {
-      if (!firedSet.contains(15)) {
-        firedSet.add(15);
-        await _triggerAlarm(
-          sessionId: s.id,
-          tableName: s.tableName,
-          minutesLeft: 15,
-          title: 'Nhắc nhở: Còn 15 phút',
-          body: '${s.tableName} còn 15 phút trong phiên dùng bàn tiêu chuẩn.',
-        );
-      }
-    }
+    final remainingMinutes =
+        s.expiresAt.difference(ClockService.instance.serverNow).inMinutes;
+    final thresholds = [...config.warnMinutes]..sort();
+    final threshold = remainingMinutes <= 0
+        ? 0
+        : thresholds
+            .where((value) => remainingMinutes <= value)
+            .cast<int?>()
+            .firstWhere((_) => true, orElse: () => null);
+    if (threshold == null) return;
+    final fired = firedBySession.putIfAbsent(s.id, () => <int>{});
+    if (!fired.add(threshold)) return;
+    await _triggerAlarm(
+        sessionId: s.id,
+        tableName: s.tableName,
+        minutesLeft: threshold,
+        title: threshold == 0
+            ? 'Hết giờ dùng bàn!'
+            : 'Nhắc nhở: Còn $threshold phút',
+        body: threshold == 0
+            ? 'undefined đã hết giờ. Vui lòng thanh toán hoặc gia hạn.'
+            : 'undefined còn $threshold phút trước khi kết thúc phiên.');
   }
 
   /// Định kỳ mỗi giây hoặc mỗi lượt tick của đồng hồ quét toàn bộ danh sách phiên đang hoạt động.
   /// Thường được gọi bởi ứng dụng Phục vụ (`waiter_app`) và Quầy POS (`counter_app`).
-  void onTickCheck(List<SessionModel> activeSessions) {
+  void onTickCheck(List<SessionModel> activeSessions,
+      {AppConfig config = AppConfig.defaultConfig}) {
     for (final session in activeSessions) {
-      syncAlarmsForSession(session);
+      syncAlarmsForSession(session, config: config);
     }
   }
 
@@ -153,4 +138,3 @@ class AlarmService {
     firedBySession.remove(sessionId);
   }
 }
-

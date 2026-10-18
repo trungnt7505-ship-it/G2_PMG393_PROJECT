@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:core/core.dart';
 
-/// Hộp thoại xem trước và in hóa đơn thanh toán dạng biên lai quầy thu ngân.
+/// Xem hóa đơn đã thanh toán trên màn hình laptop.
 class InvoicePreviewDialog extends StatelessWidget {
   final PaymentModel payment;
   final List<OrderItemModel> items;
@@ -142,7 +142,8 @@ class InvoicePreviewDialog extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    _buildRow('Điểm tích lũy mới:', '+${payment.pointsEarned} điểm'),
+                    _buildRow(
+                        'Điểm tích lũy mới:', '+${payment.pointsEarned} điểm'),
                     if (payment.bonusPoints > 0)
                       _buildRow(
                         'Điểm thưởng ưu đãi:',
@@ -164,21 +165,6 @@ class InvoicePreviewDialog extends StatelessWidget {
             // Nút bấm
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Lệnh in hóa đơn đã được gửi tới máy in nhiệt!'),
-                        ),
-                      );
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.print),
-                    label: const Text('In hóa đơn'),
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -204,7 +190,8 @@ class InvoicePreviewDialog extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          Text(label,
+              style: const TextStyle(fontSize: 13, color: Colors.black87)),
           Text(
             value,
             style: TextStyle(
@@ -218,4 +205,3 @@ class InvoicePreviewDialog extends StatelessWidget {
     );
   }
 }
-

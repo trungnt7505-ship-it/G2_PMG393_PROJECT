@@ -49,7 +49,8 @@ class OrderDetailPanel extends ConsumerWidget {
         );
 
     final openRequests = ref.watch(openRequestsProvider).value ?? [];
-    final tableRequests = openRequests.where((r) => r.tableId == selectedTableId).toList();
+    final tableRequests =
+        openRequests.where((r) => r.tableId == selectedTableId).toList();
 
     return Container(
       color: Colors.white,
@@ -66,7 +67,8 @@ class OrderDetailPanel extends ConsumerWidget {
                 children: [
                   Text(
                     table?.name ?? selectedTableId,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   Text(
                     '${table?.zone ?? ''} • ${table?.capacity ?? 0} chỗ',
@@ -76,7 +78,8 @@ class OrderDetailPanel extends ConsumerWidget {
               ),
               if (activeSession != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: activeSession.status == 'billing'
                         ? Colors.red.shade100
@@ -84,7 +87,9 @@ class OrderDetailPanel extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    activeSession.status == 'billing' ? 'Yêu cầu tính tiền' : 'Đang sử dụng',
+                    activeSession.status == 'billing'
+                        ? 'Yêu cầu tính tiền'
+                        : 'Đang sử dụng',
                     style: TextStyle(
                       color: activeSession.status == 'billing'
                           ? Colors.red.shade900
@@ -112,11 +117,13 @@ class OrderDetailPanel extends ConsumerWidget {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.notifications_active, color: Colors.amber, size: 20),
+                      Icon(Icons.notifications_active,
+                          color: Colors.amber, size: 20),
                       SizedBox(width: 6),
                       Text(
                         'Yêu cầu hỗ trợ cần xử lý:',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ],
                   ),
@@ -139,7 +146,8 @@ class OrderDetailPanel extends ConsumerWidget {
                                   .read(posDashboardViewModelProvider.notifier)
                                   .resolveRequest(req.id);
                             },
-                            child: const Text('Xong', style: TextStyle(fontSize: 12)),
+                            child: const Text('Xong',
+                                style: TextStyle(fontSize: 12)),
                           ),
                         ],
                       ),
@@ -158,11 +166,13 @@ class OrderDetailPanel extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_outline, size: 48, color: Colors.green),
+                    const Icon(Icons.check_circle_outline,
+                        size: 48, color: Colors.green),
                     const SizedBox(height: 8),
                     Text(
                       'Bàn đang ${table?.status == 'needs_cleaning' ? 'chờ dọn dẹp' : 'trống'}',
-                      style: const TextStyle(fontSize: 16, color: Colors.black54),
+                      style:
+                          const TextStyle(fontSize: 16, color: Colors.black54),
                     ),
                   ],
                 ),
@@ -175,7 +185,8 @@ class OrderDetailPanel extends ConsumerWidget {
               children: [
                 Text(
                   'Khách: ${activeSession.customerName}',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 Text(
                   'Bắt đầu: ${timeFmt.format(activeSession.startedAt)}',
@@ -189,7 +200,8 @@ class OrderDetailPanel extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Thời gian còn lại:', style: TextStyle(fontSize: 13)),
+                const Text('Thời gian còn lại:',
+                    style: TextStyle(fontSize: 13)),
                 CountdownTimerWidget(
                   expiresAt: activeSession.expiresAt,
                   fontSize: 16,
@@ -207,16 +219,24 @@ class OrderDetailPanel extends ConsumerWidget {
             Expanded(
               child: Consumer(
                 builder: (context, ref, _) {
-                  final sessionOrdersAsync = ref.watch(sessionOrdersProvider(activeSession.id));
+                  final sessionOrdersAsync =
+                      ref.watch(sessionOrdersProvider(activeSession.id));
 
                   return sessionOrdersAsync.when(
                     data: (orders) {
                       if (orders.isEmpty) {
-                        return const Center(child: Text('Chưa có món nào được gọi.'));
+                        return const Center(
+                            child: Text('Chưa có món nào được gọi.'));
                       }
 
-                      final allItems = orders.expand((o) => o.items).toList();
-                      final hasPending = orders.any((o) => o.orderStatus == OrderStatus.pending);
+                      final allItems = orders
+                          .where((o) =>
+                              o.orderStatus != OrderStatus.cancelled &&
+                              o.orderStatus != OrderStatus.pending)
+                          .expand((o) => o.items)
+                          .toList();
+                      final hasPending = orders
+                          .any((o) => o.orderStatus == OrderStatus.pending);
 
                       return Column(
                         children: [
@@ -227,16 +247,19 @@ class OrderDetailPanel extends ConsumerWidget {
                               decoration: BoxDecoration(
                                 color: Colors.orange.shade50,
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.orange.shade300),
+                                border:
+                                    Border.all(color: Colors.orange.shade300),
                               ),
                               child: const Row(
                                 children: [
-                                  Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                                  Icon(Icons.warning_amber,
+                                      size: 16, color: Colors.orange),
                                   SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
                                       'Còn đơn chờ duyệt! Cần duyệt trước khi thanh toán.',
-                                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                                      style: TextStyle(
+                                          fontSize: 11, color: Colors.orange),
                                     ),
                                   ),
                                 ],
@@ -245,7 +268,8 @@ class OrderDetailPanel extends ConsumerWidget {
                           Expanded(
                             child: ListView.separated(
                               itemCount: allItems.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final item = allItems[index];
                                 return ListTile(
@@ -253,11 +277,15 @@ class OrderDetailPanel extends ConsumerWidget {
                                   contentPadding: EdgeInsets.zero,
                                   title: Text(
                                     '${item.qty}x ${item.name}',
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13),
                                   ),
                                   subtitle: item.selectedOptions.isNotEmpty
                                       ? Text(
-                                          item.selectedOptions.map((o) => o.choiceName).join(', '),
+                                          item.selectedOptions
+                                              .map((o) => o.choiceName)
+                                              .join(', '),
                                           style: const TextStyle(fontSize: 11),
                                         )
                                       : null,
@@ -272,7 +300,8 @@ class OrderDetailPanel extends ConsumerWidget {
                         ],
                       );
                     },
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Center(child: Text('Lỗi: $e')),
                   );
                 },
@@ -303,8 +332,15 @@ class OrderDetailPanel extends ConsumerWidget {
             // Nút mở modal thanh toán
             ElevatedButton.icon(
               onPressed: () {
-                final orders = ref.read(sessionOrdersProvider(activeSession.id)).value ?? [];
-                final allItems = orders.expand((o) => o.items).toList();
+                final orders =
+                    ref.read(sessionOrdersProvider(activeSession.id)).value ??
+                        [];
+                final allItems = orders
+                    .where((o) =>
+                        o.orderStatus != OrderStatus.cancelled &&
+                        o.orderStatus != OrderStatus.pending)
+                    .expand((o) => o.items)
+                    .toList();
 
                 showDialog(
                   context: context,
@@ -323,7 +359,8 @@ class OrderDetailPanel extends ConsumerWidget {
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ],
@@ -332,4 +369,3 @@ class OrderDetailPanel extends ConsumerWidget {
     );
   }
 }
-

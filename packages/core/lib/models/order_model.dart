@@ -81,7 +81,8 @@ class OrderItemModel {
 
   /// Tính thành tiền của món (bao gồm cả giá phụ thu từ các tùy chọn).
   int get totalPrice {
-    final extra = selectedOptions.fold<int>(0, (sum, opt) => sum + opt.extraPrice);
+    final extra =
+        selectedOptions.fold<int>(0, (sum, opt) => sum + opt.extraPrice);
     return (unitPrice + extra) * qty;
   }
 
@@ -133,6 +134,9 @@ class OrderItemModel {
 /// Đơn gọi món trong phiên hoặc mang đi.
 /// Firestore path: `sessions/{sessionId}/orders/{orderId}` hoặc `takeawayOrders/{orderId}`.
 class OrderModel {
+  /// Hóa đơn đơn mang đi; null cho dữ liệu cũ/chưa thu tiền.
+  final String? paymentId;
+
   /// Mã định danh đơn hàng.
   final String id;
 
@@ -173,6 +177,7 @@ class OrderModel {
   final DateTime updatedAt;
 
   const OrderModel({
+    this.paymentId,
     required this.id,
     required this.sessionId,
     required this.tableId,
@@ -196,6 +201,7 @@ class OrderModel {
 
   factory OrderModel.fromMap(Map<String, dynamic> map, String id) {
     return OrderModel(
+      paymentId: map['paymentId'] as String?,
       id: id,
       sessionId: map['sessionId'] as String? ?? '',
       tableId: map['tableId'] as String? ?? '',
@@ -218,6 +224,7 @@ class OrderModel {
 
   Map<String, dynamic> toMap() {
     return {
+      if (paymentId != null) 'paymentId': paymentId,
       'sessionId': sessionId,
       'tableId': tableId,
       'tableName': tableName,
@@ -234,6 +241,7 @@ class OrderModel {
   }
 
   OrderModel copyWith({
+    String? paymentId,
     String? id,
     String? sessionId,
     String? tableId,
@@ -249,6 +257,7 @@ class OrderModel {
     DateTime? updatedAt,
   }) {
     return OrderModel(
+      paymentId: paymentId ?? this.paymentId,
       id: id ?? this.id,
       sessionId: sessionId ?? this.sessionId,
       tableId: tableId ?? this.tableId,
@@ -265,4 +274,3 @@ class OrderModel {
     );
   }
 }
-

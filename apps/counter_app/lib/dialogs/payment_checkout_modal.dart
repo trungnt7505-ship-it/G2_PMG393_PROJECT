@@ -12,12 +12,14 @@ class PaymentCheckoutModal extends ConsumerStatefulWidget {
   final SessionModel session;
   final List<OrderItemModel> items;
   final UserModel? initialMember;
+  final String? takeawayOrderId;
 
   const PaymentCheckoutModal({
     super.key,
     required this.session,
     this.items = const [],
     this.initialMember,
+    this.takeawayOrderId,
   });
 
   @override
@@ -27,7 +29,8 @@ class PaymentCheckoutModal extends ConsumerStatefulWidget {
 
 class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _pointsController = TextEditingController(text: '0');
+  final TextEditingController _pointsController =
+      TextEditingController(text: '0');
 
   UserModel? _member;
   PaymentMethod _selectedMethod = PaymentMethod.cash;
@@ -41,7 +44,8 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
     super.initState();
     if (widget.initialMember != null) {
       _member = widget.initialMember;
-    } else if (widget.session.customerId != null && widget.session.customerId!.isNotEmpty) {
+    } else if (widget.session.customerId != null &&
+        widget.session.customerId!.isNotEmpty) {
       _loadCustomerById(widget.session.customerId!);
     }
   }
@@ -62,7 +66,8 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
       _pointsController.text = '0';
     });
     try {
-      final customer = await ref.read(authServiceProvider).findCustomerById(uid);
+      final customer =
+          await ref.read(authServiceProvider).findCustomerById(uid);
       if (!mounted || version != _memberLookupVersion) return;
       setState(() {
         _member = customer;
@@ -125,7 +130,9 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
     setState(() {});
   }
 
-  Future<void> _submitPayment(PaymentCalculationResult calc) async {
+  Future<void> _submitPayment(
+      PaymentCalculationResult calc, AppConfig config) async {
+    if (_isSubmitting || _isSearchingMember) return;
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -133,28 +140,59 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
 
     try {
       final paymentService = ref.read(paymentServiceProvider);
-      final currentUser = ref.read(currentUserProvider).value;
-      final cashierId = currentUser?.displayName.isNotEmpty == true
-          ? currentUser!.displayName
-          : (currentUser?.email ?? 'Thu ngân');
+      final currentUser = await ref.read(currentUserProvider.future);
+      if (currentUser == null) throw StateError('Vui lòng đăng nhập lại.');
+      final cashierId = currentUser.id;
 
-      final payment = await paymentService.payAndClose(
-        sessionId: widget.session.id,
-        cashierId: cashierId,
-        method: _selectedMethod,
-        customerId: _member?.id,
-        pointsUsed: calc.pointsUsed,
-      );
+      final payment = widget.takeawayOrderId != null
+          ? await paymentService.payTakeaway(
+              orderId: widget.takeawayOrderId!,
+              cashierId: cashierId,
+              method: _selectedMethod,
+              customerId: _member?.id ?? '',
+              pointsUsed: calc.pointsUsed,
+              expectedSubtotal: calc.subtotal,
+              expectedConfig: config)
+          : await paymentService.payAndClose(
+              sessionId: widget.session.id,
+              cashierId: cashierId,
+              method: _selectedMethod,
+              customerId: _member?.id,
+              pointsUsed: calc.pointsUsed,
+              expectedSubtotal: calc.subtotal,
+              expectedConfig: config,
+            );
 
       if (!mounted) return;
-      Navigator.of(context).pop(); // Đóng modal thanh toán
+      final navigator = Navigator.of(context);
+      final receipt = paymentService.getPaymentItems(payment.id);
+      navigator.pop();
 
       // Mở hộp thoại xem hóa đơn
       showDialog(
-        context: context,
-        builder: (ctx) => InvoicePreviewDialog(
-          payment: payment,
-          items: widget.items,
+        context: navigator.context,
+        builder: (ctx) => FutureBuilder<List<OrderItemModel>>(
+          future: receipt,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return InvoicePreviewDialog(
+                  payment: payment, items: snapshot.data!);
+            }
+            return AlertDialog(
+              title: const Text('Đã thanh toán thành công'),
+              content: snapshot.hasError
+                  ? Text(
+                      'Hóa đơn ${payment.id} đã lưu. Chưa tải được chi tiết: ${snapshot.error}')
+                  : const SizedBox(
+                      height: 60,
+                      child: Center(child: CircularProgressIndicator())),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Đóng'))
+              ],
+            );
+          },
         ),
       );
     } catch (e) {
@@ -169,24 +207,58 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
   @override
   Widget build(BuildContext context) {
     final currencyFmt = NumberFormat('#,###', 'vi_VN');
-    final subtotal = widget.session.subtotal;
+    final configAsync = ref.watch(appConfigProvider);
+    final config = configAsync.valueOrNull ?? AppConfig.defaultConfig;
+    final sessionAsync = widget.takeawayOrderId == null
+        ? ref.watch(sessionStreamProvider(widget.session.id))
+        : null;
+    final session = sessionAsync?.valueOrNull ?? widget.session;
+    final sessionClosed = sessionAsync != null &&
+        !sessionAsync.isLoading &&
+        (sessionAsync.valueOrNull == null ||
+            !['active', 'billing'].contains(session.status));
+    final reservationId = session.reservationId;
+    final reservationAsync = reservationId != null && reservationId.isNotEmpty
+        ? ref.watch(reservationByIdProvider(reservationId))
+        : null;
+    final hasPreOrder = reservationAsync?.valueOrNull?.hasPreOrder ?? false;
+    final calculationLoading = configAsync.isLoading ||
+        (reservationAsync?.isLoading ?? false) ||
+        (sessionAsync?.isLoading ?? false);
+    final calculationError =
+        configAsync.error ?? reservationAsync?.error ?? sessionAsync?.error;
+    final subtotal = session.subtotal;
 
     // Giới hạn điểm tối đa: không quá 50% subtotal và không quá điểm member đang có
-    final maxPointsByBill = (subtotal * AppConfig.defaultConfig.maxRedeemPercent) ~/
-        (100 * AppConfig.defaultConfig.pointRedeemVnd);
+    final maxPointsByBill = (subtotal * config.maxRedeemPercent) ~/
+        (100 * max(1, config.pointRedeemVnd));
     final memberPoints = _member?.points ?? 0;
-    final maxPointsAllowed = _member != null ? min(maxPointsByBill, memberPoints) : 0;
+    final maxPointsAllowed =
+        _member != null ? min(maxPointsByBill, memberPoints) : 0;
 
     final enteredPoints = int.tryParse(_pointsController.text) ?? 0;
     final validPointsToUse = enteredPoints.clamp(0, maxPointsAllowed);
 
     // Tính toán tiền thực tế
-    final calc = PaymentService.calculatePayment(
-      subtotal: subtotal,
-      pointsUsed: validPointsToUse,
-      earlyReleased: widget.session.earlyReleased,
-      hasPreOrder: widget.session.reservationId != null,
-    );
+    PaymentCalculationResult calc;
+    try {
+      calc = PaymentService.calculatePayment(
+        subtotal: subtotal,
+        pointsUsed: validPointsToUse,
+        earlyReleased: session.earlyReleased,
+        hasPreOrder: hasPreOrder,
+        config: config,
+      );
+    } catch (e) {
+      return AlertDialog(
+          title: const Text('Cấu hình thanh toán không hợp lệ'),
+          content: Text('$e'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Đóng'))
+          ]);
+    }
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -202,19 +274,25 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
+                  Expanded(
+                      child: Row(
                     children: [
-                      const Icon(Icons.point_of_sale, color: AppColors.primary, size: 28),
+                      const Icon(Icons.point_of_sale,
+                          color: AppColors.primary, size: 28),
                       const SizedBox(width: 10),
-                      Text(
+                      Expanded(
+                          child: Text(
                         'Thanh toán - ${widget.session.tableName}',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      )),
                     ],
-                  ),
+                  )),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
@@ -247,9 +325,11 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                           children: [
                             Text(
                               _member!.displayName,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            Text('SĐT: ${_member!.phone} • Điểm hiện có: ${_member!.points} điểm'),
+                            Text(
+                                'SĐT: ${_member!.phone} • Điểm hiện có: ${_member!.points} điểm'),
                           ],
                         ),
                       ),
@@ -283,7 +363,8 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: _isSearchingMember ? null : _searchMemberByPhone,
+                      onPressed:
+                          _isSearchingMember ? null : _searchMemberByPhone,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -292,7 +373,8 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
                             )
                           : const Text('Tìm'),
                     ),
@@ -315,10 +397,13 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
               const SizedBox(height: 16),
 
               // 2. Đổi điểm giảm giá
-              if (_member != null && _member!.points > 0 && maxPointsAllowed > 0) ...[
-                const Text(
-                  '2. Đổi điểm giảm giá (Tối đa 50% hóa đơn)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              if (_member != null &&
+                  _member!.points > 0 &&
+                  maxPointsAllowed > 0) ...[
+                Text(
+                  '2. Đổi điểm giảm giá (Tối đa ${config.maxRedeemPercent}% hóa đơn)',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -328,13 +413,17 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                         key: const Key('points_input_field'),
                         controller: _pointsController,
                         decoration: InputDecoration(
-                          labelText: 'Số điểm muốn đổi (1 điểm = 1.000đ)',
-                          helperText: 'Tối đa được đổi: $maxPointsAllowed điểm (${currencyFmt.format(maxPointsAllowed * 1000)} đ)',
+                          labelText:
+                              'Số điểm muốn đổi (1 điểm = ${currencyFmt.format(config.pointRedeemVnd)}đ)',
+                          helperText:
+                              'Tối đa được đổi: $maxPointsAllowed điểm (${currencyFmt.format(maxPointsAllowed * config.pointRedeemVnd)} đ)',
+                          helperMaxLines: 2,
                           border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
-                        onChanged: (val) => _onPointsChanged(val, maxPointsAllowed),
+                        onChanged: (val) =>
+                            _onPointsChanged(val, maxPointsAllowed),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -423,7 +512,8 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                       children: [
                         const Text(
                           'SỐ TIỀN THỰC THU:',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         Text(
                           '${currencyFmt.format(calc.total)} đ',
@@ -439,24 +529,30 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Tích lũy đơn (10k = 1đ):'),
-                        Text('+${calc.pointsEarned} điểm'),
+                        Expanded(
+                            child: Text(
+                                'Tích lũy (${currencyFmt.format(config.pointEarnVnd)}đ = 1 điểm):')),
+                        Text(
+                            '+${_member == null ? 0 : calc.pointsEarned} điểm'),
                       ],
                     ),
-                    if (calc.bonusEarlyRelease > 0) ...[
+                    if (_member != null && calc.bonusEarlyRelease > 0) ...[
                       const SizedBox(height: 4),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Thưởng trả bàn sớm (>=30p):'),
+                          Text(
+                              'Thưởng trả bàn sớm (>=${config.earlyReleaseMinMinutes}p):'),
                           Text(
                             '+${calc.bonusEarlyRelease} điểm',
-                            style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
                     ],
-                    if (calc.bonusPreOrder > 0) ...[
+                    if (_member != null && calc.bonusPreOrder > 0) ...[
                       const SizedBox(height: 4),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -464,7 +560,9 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                           const Text('Thưởng đặt món trước:'),
                           Text(
                             '+${calc.bonusPreOrder} điểm',
-                            style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -489,31 +587,48 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
                 ),
               ],
               const SizedBox(height: 20),
+              if (calculationLoading) const LinearProgressIndicator(),
+              if (calculationError != null)
+                Text('Không tải được cấu hình/đặt chỗ: $calculationError'),
+              if (sessionClosed)
+                const Text(
+                    'Phiên bàn đã đóng hoặc không còn tồn tại. Vui lòng đóng hộp thanh toán.'),
+              const Text(
+                  'Tiền mặt, QR và thẻ là phương thức ghi nhận thu tiền; hãy xác nhận đã nhận tiền trước khi chốt.'),
 
               // Nút hoàn tất thanh toán
               ElevatedButton.icon(
                 key: const Key('confirm_payment_button'),
-                onPressed: _isSubmitting || _isSearchingMember
+                onPressed: _isSubmitting ||
+                        _isSearchingMember ||
+                        calculationLoading ||
+                        calculationError != null ||
+                        sessionClosed
                     ? null
-                    : () => _submitPayment(calc),
+                    : () => _submitPayment(calc, config),
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.check_circle),
                 label: Text(
                   _isSubmitting
                       ? 'Đang xử lý...'
-                      : 'Xác nhận Thanh toán & Đóng bàn',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      : widget.takeawayOrderId == null
+                          ? 'Xác nhận Thanh toán & Đóng bàn'
+                          : 'Xác nhận đã thu tiền mang đi',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ],

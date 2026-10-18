@@ -46,6 +46,7 @@ void main() {
         menuItemsProvider.overrideWith((ref) => Stream.value([])),
         appConfigProvider
             .overrideWith((ref) => Stream.value(AppConfig.defaultConfig)),
+        todaySessionsProvider.overrideWith((ref) => Stream.value([])),
         todayPaymentsProvider.overrideWith((ref) => Stream.value([])),
         todayNoShowsProvider.overrideWith((ref) => Stream.value([])),
       ]);

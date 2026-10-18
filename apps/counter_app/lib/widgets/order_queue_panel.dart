@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:core/core.dart';
 import '../dialogs/takeaway_order_dialog.dart';
+import '../dialogs/payment_checkout_modal.dart';
 import '../viewmodels/pos_dashboard_viewmodel.dart';
 
 /// Cột 2: Hàng đợi pha chế & quản lý đơn gọi món (Kitchen / Bar Queue).
@@ -23,6 +24,7 @@ class OrderQueuePanel extends ConsumerWidget {
         OrderStatus.confirmed,
         OrderStatus.preparing,
         OrderStatus.ready,
+        OrderStatus.served,
       ]),
     );
 
@@ -39,16 +41,20 @@ class OrderQueuePanel extends ConsumerWidget {
           // Header & Nút tạo đơn Takeaway
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.soup_kitchen, color: AppColors.primary),
                     SizedBox(width: 8),
                     Text(
                       'Hàng đợi Pha chế',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -64,7 +70,8 @@ class OrderQueuePanel extends ConsumerWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
                 ),
               ],
@@ -76,7 +83,13 @@ class OrderQueuePanel extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
               spacing: 8,
-              children: ['Tất cả', 'Chờ duyệt', 'Đang pha chế', 'Sẵn sàng'].map((filter) {
+              children: [
+                'Tất cả',
+                'Chờ duyệt',
+                'Đang pha chế',
+                'Sẵn sàng',
+                'Chờ thanh toán'
+              ].map((filter) {
                 final isSelected = dashboardState.orderFilter == filter;
                 return ChoiceChip(
                   label: Text(filter),
@@ -88,7 +101,9 @@ class OrderQueuePanel extends ConsumerWidget {
                     fontWeight: FontWeight.bold,
                   ),
                   onSelected: (_) {
-                    ref.read(posDashboardViewModelProvider.notifier).filterOrder(filter);
+                    ref
+                        .read(posDashboardViewModelProvider.notifier)
+                        .filterOrder(filter);
                   },
                 );
               }).toList(),
@@ -102,6 +117,21 @@ class OrderQueuePanel extends ConsumerWidget {
             child: ordersAsync.when(
               data: (orders) {
                 final filteredOrders = orders.where((o) {
+                  if (o.orderType == OrderType.takeaway &&
+                      o.paymentId != null &&
+                      o.orderStatus == OrderStatus.served) {
+                    return false;
+                  }
+                  if (o.orderStatus == OrderStatus.served &&
+                      o.orderType != OrderType.takeaway) {
+                    return false;
+                  }
+                  if (dashboardState.orderFilter == 'Chờ thanh toán') {
+                    return o.orderType == OrderType.takeaway &&
+                        o.paymentId == null &&
+                        [OrderStatus.ready, OrderStatus.served]
+                            .contains(o.orderStatus);
+                  }
                   if (dashboardState.orderFilter == 'Chờ duyệt') {
                     return o.orderStatus == OrderStatus.pending;
                   }
@@ -150,7 +180,14 @@ class OrderQueuePanel extends ConsumerWidget {
                       case OrderStatus.ready:
                         statusBgColor = Colors.green.shade100;
                         statusTextColor = Colors.green.shade900;
-                        statusLabel = 'Pha xong';
+                        statusLabel = order.paymentId == null
+                            ? 'Pha xong'
+                            : 'Pha xong • Đã thu tiền';
+                        break;
+                      case OrderStatus.served:
+                        statusBgColor = Colors.orange.shade100;
+                        statusTextColor = Colors.orange.shade900;
+                        statusLabel = 'Đã phục vụ • Chưa thu tiền';
                         break;
                       default:
                         statusBgColor = Colors.grey.shade100;
@@ -171,10 +208,13 @@ class OrderQueuePanel extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Header của đơn
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              spacing: 8,
+                              runSpacing: 8,
                               children: [
                                 Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       order.tableName,
@@ -186,20 +226,25 @@ class OrderQueuePanel extends ConsumerWidget {
                                     const SizedBox(width: 8),
                                     if (order.orderType == OrderType.takeaway)
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: Colors.brown.shade100,
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: const Text(
                                           'Mang đi',
-                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold),
                                         ),
                                       ),
                                   ],
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: statusBgColor,
                                     borderRadius: BorderRadius.circular(8),
@@ -217,35 +262,45 @@ class OrderQueuePanel extends ConsumerWidget {
                             ),
                             Text(
                               'Đặt lúc: ${timeFmt.format(order.createdAt)} • Người tạo: ${order.createdBy} (${order.createdByRole})',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.grey.shade600),
                             ),
                             const Divider(height: 16),
 
                             // Danh sách món
                             ...order.items.map((item) {
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 2),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       '${item.qty}x ',
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
                                     ),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             item.name,
-                                            style: const TextStyle(fontSize: 13),
+                                            style:
+                                                const TextStyle(fontSize: 13),
                                           ),
                                           if (item.selectedOptions.isNotEmpty)
                                             Text(
-                                              item.selectedOptions.map((o) => o.choiceName).join(', '),
-                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                              item.selectedOptions
+                                                  .map((o) => o.choiceName)
+                                                  .join(', '),
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey.shade600),
                                             ),
-                                          if (item.note != null && item.note!.isNotEmpty)
+                                          if (item.note != null &&
+                                              item.note!.isNotEmpty)
                                             Text(
                                               'Ghi chú: ${item.note}',
                                               style: const TextStyle(
@@ -268,43 +323,72 @@ class OrderQueuePanel extends ConsumerWidget {
                             const Divider(height: 16),
 
                             // Tổng tiền & Nút điều khiển trạng thái
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              spacing: 12,
+                              runSpacing: 8,
                               children: [
                                 Text(
                                   'Tổng: ${currencyFmt.format(order.total)} đ',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
                                 ),
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
                                   children: [
                                     // Đơn pending -> Nút Duyệt / Từ chối
-                                    if (order.orderStatus == OrderStatus.pending) ...[
+                                    if (order.orderType == OrderType.takeaway &&
+                                        order.paymentId == null &&
+                                        [OrderStatus.ready, OrderStatus.served]
+                                            .contains(order.orderStatus))
+                                      Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 8),
+                                          child: ElevatedButton.icon(
+                                            onPressed: () => _checkoutTakeaway(
+                                                context, order),
+                                            icon: const Icon(Icons.payment),
+                                            label: const Text('Thu tiền'),
+                                          )),
+                                    if (order.orderStatus ==
+                                        OrderStatus.pending) ...[
                                       TextButton(
-                                        onPressed: () => _promptCancelOrder(context, ref, order),
-                                        child: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                        onPressed: () => _promptCancelOrder(
+                                            context, ref, order),
+                                        child: const Text('Từ chối',
+                                            style:
+                                                TextStyle(color: Colors.red)),
                                       ),
                                       const SizedBox(width: 4),
                                       ElevatedButton(
                                         onPressed: () {
                                           ref
-                                              .read(posDashboardViewModelProvider.notifier)
-                                              .approveOrder(order.sessionId, order.id);
+                                              .read(
+                                                  posDashboardViewModelProvider
+                                                      .notifier)
+                                              .approveOrder(
+                                                  order.sessionId, order.id);
                                         },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
                                         ),
                                         child: const Text('Duyệt đơn'),
                                       ),
                                     ],
 
                                     // Đơn confirmed -> Nút Bắt đầu pha chế
-                                    if (order.orderStatus == OrderStatus.confirmed)
+                                    if (order.orderStatus ==
+                                        OrderStatus.confirmed)
                                       ElevatedButton(
                                         onPressed: () {
                                           ref
-                                              .read(posDashboardViewModelProvider.notifier)
+                                              .read(
+                                                  posDashboardViewModelProvider
+                                                      .notifier)
                                               .updatePreparationStatus(
                                                 order.sessionId,
                                                 order.id,
@@ -314,17 +398,21 @@ class OrderQueuePanel extends ConsumerWidget {
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.purple,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
                                         ),
                                         child: const Text('Bắt đầu pha chế'),
                                       ),
 
                                     // Đơn preparing -> Nút Báo đã pha xong
-                                    if (order.orderStatus == OrderStatus.preparing)
+                                    if (order.orderStatus ==
+                                        OrderStatus.preparing)
                                       ElevatedButton(
                                         onPressed: () {
                                           ref
-                                              .read(posDashboardViewModelProvider.notifier)
+                                              .read(
+                                                  posDashboardViewModelProvider
+                                                      .notifier)
                                               .updatePreparationStatus(
                                                 order.sessionId,
                                                 order.id,
@@ -334,9 +422,11 @@ class OrderQueuePanel extends ConsumerWidget {
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.teal,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
                                         ),
-                                        child: const Text('Pha xong -> Sẵn sàng'),
+                                        child:
+                                            const Text('Pha xong -> Sẵn sàng'),
                                       ),
 
                                     // Đơn ready -> Nút Đã mang ra bàn
@@ -344,7 +434,9 @@ class OrderQueuePanel extends ConsumerWidget {
                                       ElevatedButton(
                                         onPressed: () {
                                           ref
-                                              .read(posDashboardViewModelProvider.notifier)
+                                              .read(
+                                                  posDashboardViewModelProvider
+                                                      .notifier)
                                               .updatePreparationStatus(
                                                 order.sessionId,
                                                 order.id,
@@ -354,7 +446,8 @@ class OrderQueuePanel extends ConsumerWidget {
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
                                         ),
                                         child: const Text('Đã phục vụ'),
                                       ),
@@ -378,7 +471,8 @@ class OrderQueuePanel extends ConsumerWidget {
     );
   }
 
-  void _promptCancelOrder(BuildContext context, WidgetRef ref, OrderModel order) {
+  void _promptCancelOrder(
+      BuildContext context, WidgetRef ref, OrderModel order) {
     final reasonController = TextEditingController();
     showDialog(
       context: context,
@@ -406,12 +500,31 @@ class OrderQueuePanel extends ConsumerWidget {
                 Navigator.of(ctx).pop();
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text('Xác nhận từ chối'),
           ),
         ],
       ),
     );
   }
-}
 
+  void _checkoutTakeaway(BuildContext context, OrderModel order) {
+    final preview = SessionModel(
+        id: 'takeaway_orders',
+        tableId: 'takeaway',
+        tableName:
+            'Mang đi #${order.id.substring(0, order.id.length < 6 ? order.id.length : 6)}',
+        customerName: 'Khách mang đi',
+        openedBy: order.createdBy,
+        openedByRole: order.createdByRole,
+        startedAt: order.createdAt,
+        expiresAt: order.createdAt,
+        subtotal: order.total);
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PaymentCheckoutModal(
+            session: preview, items: order.items, takeawayOrderId: order.id));
+  }
+}
