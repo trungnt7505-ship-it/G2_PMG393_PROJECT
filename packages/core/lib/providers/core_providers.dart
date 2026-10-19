@@ -17,6 +17,7 @@ import '../services/order_service.dart';
 import '../services/payment_service.dart';
 import '../services/reservation_service.dart';
 import '../services/seed_service.dart';
+import '../services/config_service.dart';
 import '../services/session_service.dart';
 
 // ==========================================
@@ -104,13 +105,17 @@ final openRequestsProvider = StreamProvider<List<RequestModel>>((ref) {
 /// Stream danh sách các đơn đặt bàn confirmed trong ngày hôm nay.
 final todayConfirmedReservationsProvider =
     StreamProvider<List<ReservationModel>>((ref) {
-  return ref.watch(reservationServiceProvider).watchTodayConfirmedReservations();
+  return ref
+      .watch(reservationServiceProvider)
+      .watchTodayConfirmedReservations();
 });
 
 /// Stream danh sách đặt bàn của một khách hàng cụ thể.
 final customerReservationsProvider =
     StreamProvider.family<List<ReservationModel>, String>((ref, customerId) {
-  return ref.watch(reservationServiceProvider).watchCustomerReservations(customerId);
+  return ref
+      .watch(reservationServiceProvider)
+      .watchCustomerReservations(customerId);
 });
 
 /// Stream thông tin chi tiết một phiên bàn theo `sessionId`.
@@ -154,3 +159,21 @@ final todayNoShowsProvider = StreamProvider<List<ReservationModel>>((ref) {
   return ref.watch(reservationServiceProvider).watchTodayNoShows();
 });
 
+/// Cấu hình được lưu qua service, không gọi Firestore từ màn hình.
+final configServiceProvider = Provider<ConfigService>((ref) => ConfigService());
+
+/// Các phiên bắt đầu trong ngày, không tính collection chứa đơn mang đi.
+final todaySessionsProvider = StreamProvider<List<SessionModel>>((ref) {
+  return ref.watch(sessionServiceProvider).watchTodaySessions();
+});
+
+/// Đọc đặt chỗ để tính đúng thưởng đặt món trước (đặt bàn đơn thuần không có thưởng).
+final reservationByIdProvider =
+    StreamProvider.family<ReservationModel?, String>((ref, id) {
+  return FirebaseFirestore.instance
+      .collection('reservations')
+      .doc(id)
+      .snapshots()
+      .map((doc) =>
+          doc.exists ? ReservationModel.fromMap(doc.data()!, doc.id) : null);
+});

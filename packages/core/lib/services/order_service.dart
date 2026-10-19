@@ -7,10 +7,10 @@ import 'clock_service.dart';
 /// Dịch vụ quản lý đơn gọi món, hàng đợi pha chế và trạng thái phục vụ.
 class OrderService {
   final FirebaseFirestore? _customFirestore;
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore =>
+      _customFirestore ?? FirebaseFirestore.instance;
 
-  OrderService({FirebaseFirestore? firestore})
-      : _customFirestore = firestore;
+  OrderService({FirebaseFirestore? firestore}) : _customFirestore = firestore;
 
   /// Đặt đơn gọi món mới.
   ///
@@ -38,7 +38,8 @@ class OrderService {
     int calculatedTotal = 0;
 
     for (final item in items) {
-      final itemDoc = await _firestore.collection('menuItems').doc(item.itemId).get();
+      final itemDoc =
+          await _firestore.collection('menuItems').doc(item.itemId).get();
       if (!itemDoc.exists || itemDoc.data() == null) {
         throw Exception('Món "${item.name}" không tồn tại trên thực đơn.');
       }
@@ -81,19 +82,21 @@ class OrderService {
         updatedAt: now,
       );
 
-      transaction.set(orderRef, order.toMap());
-
-      // Nếu nhân viên tạo đơn, cộng ngay vào subtotal của phiên bàn
-      if (isStaff && sessionId != 'takeaway_orders') {
+      if (sessionId != 'takeaway_orders') {
         final sessionRef = _firestore.collection('sessions').doc(sessionId);
         final sessionSnapshot = await transaction.get(sessionRef);
-        if (sessionSnapshot.exists && sessionSnapshot.data() != null) {
-          final currentSubtotal = (sessionSnapshot.data()?['subtotal'] as num?)?.toInt() ?? 0;
-          transaction.update(sessionRef, {
-            'subtotal': currentSubtotal + calculatedTotal,
-          });
+        final data = sessionSnapshot.data();
+        if (data == null || !['active', 'billing'].contains(data['status'])) {
+          throw StateError('Phiên không còn nhận đơn.');
         }
+        // Ghi cả khi pending để checkout đồng thời phải đọc lại phiên và danh sách đơn.
+        transaction.update(sessionRef, {
+          'subtotal': ((data['subtotal'] as num?)?.toInt() ?? 0) +
+              (isStaff ? calculatedTotal : 0),
+          'orderRevision': FieldValue.increment(1),
+        });
       }
+      transaction.set(orderRef, order.toMap());
 
       return orderRef.id;
     });
@@ -118,24 +121,32 @@ class OrderService {
 
       final order = OrderModel.fromMap(orderSnapshot.data()!, orderSnapshot.id);
       if (order.orderStatus != OrderStatus.pending) {
-        throw Exception('Chỉ có thể duyệt đơn hàng đang ở trạng thái chờ duyệt (pending).');
+        throw Exception(
+            'Chỉ có thể duyệt đơn hàng đang ở trạng thái chờ duyệt (pending).');
       }
-
-      transaction.update(orderRef, {
-        'status': OrderStatus.confirmed.name,
-        'updatedAt': Timestamp.fromDate(now),
-      });
 
       if (sessionId != 'takeaway_orders') {
         final sessionRef = _firestore.collection('sessions').doc(sessionId);
         final sessionSnapshot = await transaction.get(sessionRef);
-        if (sessionSnapshot.exists && sessionSnapshot.data() != null) {
-          final currentSubtotal = (sessionSnapshot.data()?['subtotal'] as num?)?.toInt() ?? 0;
+        if (!sessionSnapshot.exists ||
+            !['active', 'billing']
+                .contains(sessionSnapshot.data()?['status'])) {
+          throw StateError('Phiên không còn hoạt động.');
+        }
+        if (sessionSnapshot.exists &&
+            sessionSnapshot.data() != null &&
+            ['active', 'billing'].contains(sessionSnapshot.data()!['status'])) {
+          final currentSubtotal =
+              (sessionSnapshot.data()?['subtotal'] as num?)?.toInt() ?? 0;
           transaction.update(sessionRef, {
             'subtotal': currentSubtotal + order.total,
           });
         }
       }
+      transaction.update(orderRef, {
+        'status': OrderStatus.confirmed.name,
+        'updatedAt': Timestamp.fromDate(now),
+      });
     });
   }
 
@@ -164,25 +175,35 @@ class OrderService {
         return; // Đã hủy từ trước
       }
 
+      if (order.paymentId != null)
+        throw StateError('Không thể hủy đơn đã thanh toán.');
       final wasCountedInSubtotal = order.orderStatus != OrderStatus.pending;
 
-      transaction.update(orderRef, {
-        'status': OrderStatus.cancelled.name,
-        'cancelReason': reason,
-        'updatedAt': Timestamp.fromDate(now),
-      });
-
-      if (wasCountedInSubtotal && sessionId != 'takeaway_orders') {
+      if (sessionId != 'takeaway_orders') {
         final sessionRef = _firestore.collection('sessions').doc(sessionId);
         final sessionSnapshot = await transaction.get(sessionRef);
+        if (!sessionSnapshot.exists ||
+            !['active', 'billing']
+                .contains(sessionSnapshot.data()?['status'])) {
+          throw StateError('Phiên không còn hoạt động.');
+        }
         if (sessionSnapshot.exists && sessionSnapshot.data() != null) {
-          final currentSubtotal = (sessionSnapshot.data()?['subtotal'] as num?)?.toInt() ?? 0;
-          final updatedSubtotal = (currentSubtotal - order.total).clamp(0, double.infinity).toInt();
+          final currentSubtotal =
+              (sessionSnapshot.data()?['subtotal'] as num?)?.toInt() ?? 0;
+          final updatedSubtotal =
+              (currentSubtotal - (wasCountedInSubtotal ? order.total : 0))
+                  .clamp(0, double.infinity)
+                  .toInt();
           transaction.update(sessionRef, {
             'subtotal': updatedSubtotal,
           });
         }
       }
+      transaction.update(orderRef, {
+        'status': OrderStatus.cancelled.name,
+        'cancelReason': reason,
+        'updatedAt': Timestamp.fromDate(now),
+      });
     });
   }
 
@@ -221,7 +242,8 @@ class OrderService {
 
   /// Lắng nghe tất cả các đơn hàng trên toàn hệ thống có trạng thái nằm trong danh sách [statuses].
   /// Sử dụng collectionGroup('orders') để phục vụ màn hình Quầy pha chế (KDS) và Quản lý.
-  Stream<List<OrderModel>> watchAllOrdersByStatuses(List<OrderStatus> statuses) {
+  Stream<List<OrderModel>> watchAllOrdersByStatuses(
+      List<OrderStatus> statuses) {
     if (statuses.isEmpty) {
       return Stream.value([]);
     }
@@ -241,7 +263,8 @@ class OrderService {
   }
 
   /// Quản lý bật/tắt trạng thái khả dụng của món trên thực đơn (dành cho Quản lý).
-  Future<void> toggleMenuItemAvailability(String itemId, bool isAvailable) async {
+  Future<void> toggleMenuItemAvailability(
+      String itemId, bool isAvailable) async {
     await _firestore.collection('menuItems').doc(itemId).update({
       'available': isAvailable,
     });

@@ -63,10 +63,13 @@ class PosDashboardViewModel extends StateNotifier<PosDashboardState> {
 
   /// Thu ngân duyệt đơn gọi món từ trạng thái `pending` sang `confirmed`.
   Future<void> approveOrder(String sessionId, String orderId) async {
+    if (state.isActionLoading) return;
     state = state.copyWith(isActionLoading: true);
     try {
       await _orderService.approveOrder(sessionId, orderId);
-      state = state.copyWith(isActionLoading: false, actionMessage: 'Đã duyệt đơn hàng thành công');
+      state = state.copyWith(
+          isActionLoading: false,
+          actionMessage: 'Đã duyệt đơn hàng thành công');
     } catch (e) {
       state = state.copyWith(
         isActionLoading: false,
@@ -76,11 +79,14 @@ class PosDashboardViewModel extends StateNotifier<PosDashboardState> {
   }
 
   /// Từ chối / Hủy đơn gọi món kèm theo lý do.
-  Future<void> cancelOrder(String sessionId, String orderId, String reason) async {
+  Future<void> cancelOrder(
+      String sessionId, String orderId, String reason) async {
+    if (state.isActionLoading) return;
     state = state.copyWith(isActionLoading: true);
     try {
       await _orderService.cancelOrder(sessionId, orderId, reason: reason);
-      state = state.copyWith(isActionLoading: false, actionMessage: 'Đã từ chối đơn hàng');
+      state = state.copyWith(
+          isActionLoading: false, actionMessage: 'Đã từ chối đơn hàng');
     } catch (e) {
       state = state.copyWith(
         isActionLoading: false,
@@ -95,10 +101,13 @@ class PosDashboardViewModel extends StateNotifier<PosDashboardState> {
     String orderId,
     OrderStatus newStatus,
   ) async {
+    if (state.isActionLoading) return;
     state = state.copyWith(isActionLoading: true);
     try {
-      await _orderService.updatePreparationStatus(sessionId, orderId, newStatus);
-      state = state.copyWith(isActionLoading: false);
+      await _orderService.updatePreparationStatus(
+          sessionId, orderId, newStatus);
+      state = state.copyWith(
+          isActionLoading: false, actionMessage: 'Đã cập nhật trạng thái món.');
     } catch (e) {
       state = state.copyWith(
         isActionLoading: false,
@@ -109,10 +118,12 @@ class PosDashboardViewModel extends StateNotifier<PosDashboardState> {
 
   /// Đánh dấu yêu cầu từ bàn đã xử lý xong.
   Future<void> resolveRequest(String requestId) async {
+    if (state.isActionLoading) return;
     state = state.copyWith(isActionLoading: true);
     try {
       await _sessionService.resolveRequest(requestId);
-      state = state.copyWith(isActionLoading: false, actionMessage: 'Đã xử lý yêu cầu');
+      state = state.copyWith(
+          isActionLoading: false, actionMessage: 'Đã xử lý yêu cầu');
     } catch (e) {
       state = state.copyWith(
         isActionLoading: false,
@@ -133,4 +144,3 @@ final posDashboardViewModelProvider =
     orderService: orderService,
   );
 });
-

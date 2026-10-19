@@ -63,6 +63,45 @@ class AppConfig {
   /// Giá trị cấu hình mặc định dùng khi chưa tải được từ Firestore.
   static const AppConfig defaultConfig = AppConfig();
 
+  /// Kiểm tra trước khi lưu hoặc dùng cấu hình để tính tiền/thời lượng.
+  void validate() {
+    final values = toMap();
+    for (final key in [
+      'sessionMinutes',
+      'extendStepMinutes',
+      'maxAdvanceDays',
+      'pointEarnVnd',
+      'pointRedeemVnd',
+      'earlyReleaseMinMinutes'
+    ]) {
+      if ((values[key] as int) <= 0) {
+        throw FormatException('$key phải lớn hơn 0.');
+      }
+    }
+    for (final entry in values.entries) {
+      if (entry.value is int && (entry.value as int) < 0) {
+        throw FormatException('${entry.key} không được âm.');
+      }
+    }
+    if (maxRedeemPercent > 100) {
+      throw const FormatException('Tỷ lệ giảm giá phải từ 0 đến 100%.');
+    }
+    if (sessionMinutes + bufferMinutes > 150) {
+      throw const FormatException(
+          'Phiên và thời gian dọn bàn không được vượt 150 phút (5 khung giữ chỗ).');
+    }
+    if (warnMinutes.isEmpty ||
+        warnMinutes.any((n) => n <= 0 || n >= sessionMinutes) ||
+        warnMinutes.toSet().length != warnMinutes.length) {
+      throw const FormatException(
+          'Mốc cảnh báo phải khác nhau, lớn hơn 0 và nhỏ hơn thời lượng phiên.');
+    }
+    if (minAdvanceMinutes > maxAdvanceDays * 24 * 60) {
+      throw const FormatException(
+          'Thời gian đặt trước tối thiểu vượt quá tối đa.');
+    }
+  }
+
   /// Khởi tạo AppConfig từ Map lấy trên Firestore.
   factory AppConfig.fromMap(Map<String, dynamic> map) {
     return AppConfig(
@@ -144,4 +183,3 @@ class AppConfig {
     );
   }
 }
-

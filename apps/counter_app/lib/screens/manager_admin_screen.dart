@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:core/core.dart';
+import '../widgets/app_config_form.dart';
+import '../dialogs/saved_invoice_dialog.dart';
 
 /// Màn hình Quản lý / Quản trị viên (ManagerAdminScreen):
 /// - Bật/tắt món ăn/nước uống còn hàng (`available`).
@@ -63,6 +65,7 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
         title: const Text('QUẢN TRỊ VIÊN & CẤU HÌNH HỆ THỐNG'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: MediaQuery.sizeOf(context).width < 700,
           indicatorColor: AppColors.accent,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
@@ -105,7 +108,9 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
             final item = items[index];
             return ListTile(
               leading: CircleAvatar(
-                backgroundColor: item.available ? Colors.brown.shade100 : Colors.grey.shade300,
+                backgroundColor: item.available
+                    ? Colors.brown.shade100
+                    : Colors.grey.shade300,
                 child: Icon(
                   Icons.local_cafe,
                   color: item.available ? AppColors.primary : Colors.grey,
@@ -115,7 +120,8 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
                 item.name,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  decoration: item.available ? null : TextDecoration.lineThrough,
+                  decoration:
+                      item.available ? null : TextDecoration.lineThrough,
                   color: item.available ? Colors.black87 : Colors.grey,
                 ),
               ),
@@ -161,65 +167,9 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
     final configAsync = ref.watch(appConfigProvider);
 
     return configAsync.when(
-      data: (config) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 600),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Tham số vận hành quy định trong config/app',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildConfigItem('Thời lượng phiên tiêu chuẩn:', '${config.sessionMinutes} phút'),
-                  _buildConfigItem('Mỗi lần gia hạn cộng thêm:', '${config.extendStepMinutes} phút'),
-                  _buildConfigItem('Các mốc cảnh báo hết giờ:', '${config.warnMinutes.join(', ')} phút'),
-                  _buildConfigItem('Hạn chót giữ chỗ sau giờ hẹn:', '${config.reservationHoldMinutes} phút'),
-                  _buildConfigItem('Khoảng đệm dọn bàn giữa 2 phiên:', '${config.bufferMinutes} phút'),
-                  _buildConfigItem('Cho phép check-in sớm tối đa:', '${config.checkInEarlyMinutes} phút'),
-                  _buildConfigItem('Tỷ lệ tích lũy điểm:', '${config.pointEarnVnd} VND = 1 điểm'),
-                  _buildConfigItem('Tỷ lệ đổi điểm giảm giá:', '1 điểm = ${config.pointRedeemVnd} VND'),
-                  _buildConfigItem('Giảm giá tối đa bằng điểm:', '${config.maxRedeemPercent}%'),
-                  _buildConfigItem('Thưởng trả bàn sớm (>=30p):', '+${config.earlyReleaseBonusPoints} điểm'),
-                  _buildConfigItem('Thưởng đặt món trước:', '+${config.preOrderBonusPoints} điểm'),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      data: (config) => AppConfigForm(config: config),
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Lỗi tải cấu hình: $e')),
-    );
-  }
-
-  Widget _buildConfigItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -230,6 +180,30 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
     final currencyFmt = NumberFormat('#,###', 'vi_VN');
     final paymentsAsync = ref.watch(todayPaymentsProvider);
     final noShowsAsync = ref.watch(todayNoShowsProvider);
+    final sessionsAsync = ref.watch(todaySessionsProvider);
+    final error =
+        paymentsAsync.error ?? noShowsAsync.error ?? sessionsAsync.error;
+    if (error != null) {
+      return Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Không tải được thống kê: $error'),
+        TextButton(
+            onPressed: () {
+              ref.invalidate(todayPaymentsProvider);
+              ref.invalidate(todayNoShowsProvider);
+              ref.invalidate(todaySessionsProvider);
+            },
+            child: const Text('Thử lại')),
+      ]));
+    }
+    if (paymentsAsync.isLoading ||
+        noShowsAsync.isLoading ||
+        sessionsAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final sessionCount = sessionsAsync.requireValue
+        .where((session) => session.status != 'cancelled')
+        .length;
 
     final payments = paymentsAsync.value ?? [];
     final totalRevenue = payments.fold<int>(0, (sum, p) => sum + p.total);
@@ -274,6 +248,9 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
                 ],
               ),
               const SizedBox(height: 12),
+              _buildStatCard('Số phiên bắt đầu hôm nay (không tính phiên hủy)',
+                  '$sessionCount phiên', Icons.table_restaurant, Colors.brown),
+              const SizedBox(height: 12),
               _buildStatCard(
                 'Số lượt khách bỏ bàn (No-show)',
                 '$noShowCount lượt',
@@ -283,6 +260,26 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
               const SizedBox(height: 32),
               const Divider(),
               const SizedBox(height: 16),
+
+              const Text('Hóa đơn đã thanh toán hôm nay',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              if (payments.isEmpty)
+                const Text('Chưa có hóa đơn thanh toán hôm nay.'),
+              for (final payment in [
+                ...payments
+              ]..sort((a, b) => b.paidAt.compareTo(a.paidAt)))
+                ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                        '${payment.tableName} • ${currencyFmt.format(payment.total)} đ'),
+                    subtitle: Text(
+                        '${DateFormat('HH:mm').format(payment.paidAt)} • ${payment.id}'),
+                    trailing: const Icon(Icons.receipt_long),
+                    onTap: () => showDialog(
+                        context: context,
+                        builder: (_) => SavedInvoiceDialog(payment: payment))),
+              const Divider(height: 32),
 
               // Nút khởi tạo dữ liệu mẫu Seed Data
               const Text(
@@ -301,12 +298,14 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.cloud_upload),
                 label: Text(
                   _isSeeding ? 'Đang khởi tạo...' : 'Chạy Seed Data',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -320,7 +319,9 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
                   _seedMessage!,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: _seedMessage!.contains('Lỗi') ? Colors.red : Colors.green,
+                    color: _seedMessage!.contains('Lỗi')
+                        ? Colors.red
+                        : Colors.green,
                   ),
                 ),
               ],
@@ -331,7 +332,8 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -347,17 +349,20 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
             child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(width: 12),
-          Column(
+          Expanded(
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+              Text(title,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
               const SizedBox(height: 4),
               Text(
                 value,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
-          ),
+          )),
         ],
       ),
     );

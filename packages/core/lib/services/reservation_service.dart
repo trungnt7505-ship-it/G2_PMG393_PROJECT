@@ -2,11 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/reservation_model.dart';
 import '../models/table_model.dart';
 import 'clock_service.dart';
+import 'config_service.dart';
 
 /// Dịch vụ quản lý đặt bàn trước (Pre-order / Reservation) và khóa khung giờ (Slots).
 class ReservationService {
   final FirebaseFirestore? _customFirestore;
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore =>
+      _customFirestore ?? FirebaseFirestore.instance;
 
   ReservationService({FirebaseFirestore? firestore})
       : _customFirestore = firestore;
@@ -65,6 +67,15 @@ class ReservationService {
     final slotKeys = TableSlotModel.generateSlotKeys(draft.startTime);
 
     return await _firestore.runTransaction<String>((transaction) async {
+      final config = await ConfigService(firestore: _firestore)
+          .read(transaction: transaction);
+      final now = ClockService.instance.serverNow;
+      if (draft.startTime
+              .isBefore(now.add(Duration(minutes: config.minAdvanceMinutes))) ||
+          draft.startTime
+              .isAfter(now.add(Duration(days: config.maxAdvanceDays)))) {
+        throw StateError('Thời gian đặt bàn nằm ngoài giới hạn cấu hình.');
+      }
       final slotRefs = slotKeys.map((key) {
         return _firestore
             .collection('tables')
@@ -98,7 +109,10 @@ class ReservationService {
       // Lưu tài liệu đặt bàn
       final reservation = draft.copyWith(
         id: resId,
-        createdAt: ClockService.instance.serverNow,
+        createdAt: now,
+        endTime: draft.startTime.add(Duration(minutes: config.sessionMinutes)),
+        holdUntil: draft.startTime
+            .add(Duration(minutes: config.reservationHoldMinutes)),
       );
       transaction.set(resDocRef, reservation.toMap());
 
@@ -190,7 +204,8 @@ class ReservationService {
     return _firestore
         .collection('reservations')
         .where('status', isEqualTo: 'confirmed')
-        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('startTime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
         .where('startTime', isLessThan: Timestamp.fromDate(endOfDay))
         .snapshots()
         .map((snapshot) {
@@ -209,7 +224,8 @@ class ReservationService {
     return _firestore
         .collection('reservations')
         .where('status', isEqualTo: 'no_show')
-        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('startTime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
         .where('startTime', isLessThan: Timestamp.fromDate(endOfDay))
         .snapshots()
         .map((snapshot) {

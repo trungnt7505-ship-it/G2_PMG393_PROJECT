@@ -27,6 +27,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/pos';
       }
 
+      // Bảo vệ cả đường dẫn nhập trực tiếp, không chỉ ẩn nút trên giao diện.
+      if (state.matchedLocation == '/admin' &&
+          user.userRole != UserRole.manager) {
+        return '/pos';
+      }
+
       return null;
     },
     routes: [

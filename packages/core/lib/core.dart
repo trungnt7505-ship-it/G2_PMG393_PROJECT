@@ -25,6 +25,7 @@ export 'services/order_service.dart';
 export 'services/payment_service.dart';
 export 'services/alarm_service.dart';
 export 'services/seed_service.dart';
+export 'services/config_service.dart';
 
 // Providers
 export 'providers/core_providers.dart';

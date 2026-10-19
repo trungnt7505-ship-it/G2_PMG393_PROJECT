@@ -60,7 +60,8 @@ class _UniversalQrScannerDialogState
         if (!mounted) return;
         setState(() {
           _isProcessing = false;
-          _statusMessage = 'Check-in đơn đặt trước thành công! Mã phiên: $sessionId';
+          _statusMessage =
+              'Check-in đơn đặt trước thành công! Mã phiên: $sessionId';
           _isError = false;
         });
 
@@ -72,7 +73,8 @@ class _UniversalQrScannerDialogState
       // 2. Quét QR bàn (cafe://table/{tableId}?k={qrSecret})
       if (code.startsWith('cafe://table/')) {
         final uri = Uri.parse(code);
-        final tableId = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : uri.path;
+        final tableId =
+            uri.pathSegments.isNotEmpty ? uri.pathSegments.first : uri.path;
 
         if (widget.onTableScanned != null) {
           widget.onTableScanned!(tableId);
@@ -113,14 +115,16 @@ class _UniversalQrScannerDialogState
       // Mã không khớp định dạng
       setState(() {
         _isProcessing = false;
-        _statusMessage = 'Định dạng mã QR không hợp lệ (cần cafe://preorder, cafe://table, cafe://member).';
+        _statusMessage =
+            'Định dạng mã QR không hợp lệ (cần cafe://preorder, cafe://table, cafe://member).';
         _isError = true;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
-        _statusMessage = 'Thất bại: ${e.toString().replaceAll('Exception: ', '')}';
+        _statusMessage =
+            'Thất bại: ${e.toString().replaceAll('Exception: ', '')}';
         _isError = true;
       });
     }
@@ -133,20 +137,26 @@ class _UniversalQrScannerDialogState
       child: Container(
         width: 520,
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.qr_code_scanner, color: AppColors.primary, size: 28),
+                    Icon(Icons.qr_code_scanner,
+                        color: AppColors.primary, size: 28),
                     SizedBox(width: 10),
                     Text(
                       'Quét mã QR tại Quầy',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -172,6 +182,12 @@ class _UniversalQrScannerDialogState
                   alignment: Alignment.center,
                   children: [
                     MobileScanner(
+                      errorBuilder: (context, error, child) => const Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text(
+                                  'Không mở được camera. Hãy cấp quyền camera hoặc nhập nội dung mã QR ở bên dưới.',
+                                  textAlign: TextAlign.center))),
                       onDetect: (capture) {
                         final barcodes = capture.barcodes;
                         for (final barcode in barcodes) {
@@ -208,7 +224,8 @@ class _UniversalQrScannerDialogState
               controller: _manualInputController,
               decoration: InputDecoration(
                 labelText: 'Hoặc nhập mã test thủ công',
-                hintText: 'VD: cafe://preorder/res_123 hoặc cafe://member/uid_abc',
+                hintText:
+                    'VD: cafe://preorder/res_123 hoặc cafe://member/uid_abc',
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.arrow_forward),
@@ -223,9 +240,7 @@ class _UniversalQrScannerDialogState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _isError
-                      ? Colors.red.shade50
-                      : Colors.green.shade50,
+                  color: _isError ? Colors.red.shade50 : Colors.green.shade50,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _isError ? Colors.red : Colors.green,
@@ -234,16 +249,16 @@ class _UniversalQrScannerDialogState
                 child: Text(
                   _statusMessage!,
                   style: TextStyle(
-                    color: _isError ? Colors.red.shade900 : Colors.green.shade900,
+                    color:
+                        _isError ? Colors.red.shade900 : Colors.green.shade900,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ],
           ],
-        ),
+        )),
       ),
     );
   }
 }
-

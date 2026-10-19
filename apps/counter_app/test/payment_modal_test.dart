@@ -41,6 +41,12 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            appConfigProvider
+                .overrideWith((ref) => Stream.value(AppConfig.defaultConfig)),
+            sessionStreamProvider
+                .overrideWith((ref, id) => Stream.value(testSession))
+          ],
           child: MaterialApp(
             home: Scaffold(
               body: PaymentCheckoutModal(
