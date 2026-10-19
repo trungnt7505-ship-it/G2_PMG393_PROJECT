@@ -1,6 +1,7 @@
 # PROJECT SPECIFICATION: CAFE TABLE & ORDER MANAGEMENT SYSTEM
 
-> **Tài liệu gốc dành cho AI Coding Agent (Antigravity).**
+> **Đặc tả làm việc cập nhật ngày 19/10/2026, đối chiếu mã nguồn hiện tại.**
+> Tài liệu phân biệt yêu cầu cần hoàn thành và chức năng đã triển khai tại Mục 8. Các thay đổi mới trong working tree chỉ có trên máy cho đến khi được commit/push.
 > **Nguyên tắc tối thượng cho AI:** Luôn đọc kỹ cấu trúc Monorepo, Schema Firestore, Chữ ký hàm (Method Signatures) trong `packages/core` và Quy tắc phân vùng code của 3 thành viên trước khi sinh bất kỳ dòng code nào.
 
 ---
@@ -12,7 +13,7 @@
   2. **Nhắc nhở việc ngồi lâu (Xoay vòng bàn):** Mặc định mỗi phiên ngồi 120 phút. Đồng hồ đếm ngược đồng bộ theo giờ Server, báo rung/thông báo ở các mốc 15', 5', 0', hỗ trợ gia hạn (nếu không vướng lịch đặt sau), trả bàn sớm nhận điểm thưởng, và nhân viên gửi yêu cầu nhả bàn.
 - **Tech Stack:**
   - **Framework:** Flutter (Dart 3.x+, Null Safety bắt buộc).
-  - **Kiến trúc:** Monorepo (quản lý bằng Dart Pub Workspaces hoặc Melos) gồm 1 package `core` và 3 ứng dụng (`customer_app`, `waiter_app`, `counter_app`).
+  - **Kiến trúc:** Monorepo gồm 1 package `core` và 3 ứng dụng (`customer_app`, `waiter_app`, `counter_app`). Hiện các app dùng dependency đường dẫn tới core; chưa cấu hình Pub Workspaces/Melos.
   - **State Management & Routing:** `flutter_riverpod`, `go_router`.
   - **Backend:** Firebase Authentication, Cloud Firestore (Real-time Streams & Transactions).
   - **Packages bắt buộc:** `cloud_firestore`, `firebase_auth`, `flutter_local_notifications`, `timezone`, `vibration`, `mobile_scanner`, `qr_flutter`, `intl`.
@@ -23,7 +24,7 @@
 
 ```text
 cafe_system/
-├── pubspec.yaml                  # Cấu hình Workspace / Melos
+├── pubspec.yaml                  # Package gốc; chưa cấu hình Workspace / Melos
 ├── PROJECT_SPEC.md               # File tài liệu thiết kế gốc này
 ├── firebase/
 │   ├── firestore.rules           # Phụ trách: TRƯỜNG
@@ -47,8 +48,9 @@ cafe_system/
     ├── counter_app/              # Ứng dụng Quầy POS / Quản lý -> CHỈ TRƯỜNG ĐƯỢC SỬA
     ├── customer_app/             # Ứng dụng Khách hàng        -> CHỈ DƯƠNG ĐƯỢC SỬA
     └── waiter_app/               # Ứng dụng Nhân viên Phục vụ -> CHỈ TRUNG ĐƯỢC SỬA
-    |
-    QUY TẮC BẮT BUỘC CHO AI AGENT:
+```
+
+**QUY TẮC BẮT BUỘC CHO AI AGENT:**
 Không gọi Firestore trực tiếp ở UI: Các màn hình trong apps/customer_app, apps/waiter_app, apps/counter_app TUYỆT ĐỐI KHÔNG import cloud_firestore để tự gọi .collection(...).add/update. Mọi thao tác đọc/ghi phải gọi qua các Service/Provider nằm trong packages/core.
 
 Tuân thủ phạm vi thư mục:
@@ -61,8 +63,9 @@ Khi code cho Trung: Chỉ sửa trong apps/waiter_app/.
 
 Đồng bộ giờ Server: Tuyệt đối không dùng DateTime.now() trực tiếp để tính giờ hết hạn phiên. Luôn dùng ClockService.instance.serverNow.
 
-3. HẰNG SỐ NGHIỆP VỤ & ENUMS (packages/core/lib/constants/)
-3.1. Document config/app (Class AppConfig)
+## 3. CẤU HÌNH NGHIỆP VỤ & ENUMS (packages/core/lib/constants/)
+
+### 3.1. Document config/app (Class AppConfig)
 Nếu trên Firestore chưa có document config/app, sử dụng giá trị mặc định sau:
 
 sessionMinutes: 120 (Thời lượng tiêu chuẩn 1 phiên bàn)
@@ -93,7 +96,11 @@ earlyReleaseBonusPoints: 20 (Thưởng 20 điểm khi trả bàn sớm hợp l�
 
 preOrderBonusPoints: 10 (Thưởng 10 điểm khi có đặt món trước)
 
-3.2. Các Enum chuẩn (enums.dart)
+Các con số trên là giá trị mặc định, không phải hằng số bắt buộc cho mọi lần chạy. Service đọc cấu hình khi thực hiện nghiệp vụ. Lưu cấu hình không sửa lại `expiresAt` của phiên đang mở.
+
+`AppConfig.validate()` yêu cầu các giá trị hợp lệ: số nguyên không âm; thời lượng phiên, bước gia hạn, số ngày đặt trước, đơn giá tích/đổi điểm và ngưỡng trả sớm phải dương; phần trăm đổi điểm từ 0 đến 100; `sessionMinutes + bufferMinutes <= 150` để phù hợp 5 slot; danh sách cảnh báo không rỗng, không trùng, dương và nhỏ hơn thời lượng phiên; thời gian đặt trước tối thiểu không vượt khoảng đặt trước tối đa.
+
+### 3.2. Các Enum chuẩn (enums.dart)
 UserRole: customer, waiter, counter, manager
 
 TablePhysicalStatus: available, occupied, needs_cleaning
@@ -112,7 +119,9 @@ RequestType: call_waiter, request_bill, release_table, early_release
 
 PaymentMethod: cash, qr, card
 
-4. MÔ HÌNH DỮ LIỆU FIRESTORE (packages/core/lib/models/)
+## 4. MÔ HÌNH DỮ LIỆU FIRESTORE (packages/core/lib/models/)
+
+Cả ba app dùng chung Firebase project `cafe-73637`, database `(default)`. Không tạo database hoặc bộ collection riêng theo từng app. ID model lấy từ document ID khi đọc; không yêu cầu mọi document phải chứa trường `id`. DateTime được lưu dạng Firestore Timestamp.
 Tất cả các Model phải có fromMap(Map<String, dynamic> map, String id), toMap(), và copyWith().
 
 users/{uid} (UserModel)
@@ -173,7 +182,9 @@ type: String (dine_in | takeaway), status: String (pending | confirmed | prepari
 
 cancelReason: String?, total: int, createdAt: DateTime, updatedAt: DateTime.
 
-(Lưu ý: Đối với đơn mua mang đi takeaway không có bàn, lưu vào sessions/takeaway_orders/orders/{orderId} hoặc collection takeawayOrders/{orderId}).
+Đơn mang đi chỉ lưu tại `sessions/takeaway_orders/orders/{orderId}`, với `sessionId = takeaway_orders`, `tableId = takeaway`. Không dùng collection `takeawayOrders`. Document cha `sessions/takeaway_orders` không phải phiên ngồi bàn và có thể không tồn tại.
+
+`OrderModel.paymentId: String?` là trường bổ sung tương thích dữ liệu cũ, liên kết thanh toán của đơn mang đi. Thiếu/null nghĩa là chưa thanh toán; trạng thái `served` không chứng minh đã thu tiền.
 
 requests/{reqId} (RequestModel)
 
@@ -187,8 +198,18 @@ id: String, sessionId: String, tableId: String, tableName: String, cashierId: St
 
 subtotal: int, pointsUsed: int, discount: int, total: int, pointsEarned: int, bonusPoints: int, customerId: String?, paidAt: DateTime.
 
-5. CHỮ KÝ HÀM CHUẨN TRONG packages/core/lib/services/ (CONTRACT)
-Trường sẽ implement các class này. Dương và Trung chỉ việc gọi các hàm này từ UI/Provider:
+### 4.1. Các trường bổ sung và khả năng tương thích
+
+- `payments/{payId}.items`: snapshot danh sách món tại lúc thanh toán; đọc bằng `PaymentService.getPaymentItems()`. `PaymentModel` chưa ánh xạ trường này. Hóa đơn cũ có thể thiếu snapshot.
+- `payments/{payId}.orderId`: tùy chọn, dùng cho đơn mang đi. ID payment mang đi là `takeaway_{orderId}` để chống thu tiền trùng.
+- `users/{uid}/pointTx/{txId}.paymentId`: tùy chọn để đối chiếu giao dịch. Điểm trong log có dấu cộng/trừ theo nghiệp vụ.
+- `sessions/{sessionId}.orderRevision`: metadata tùy chọn do service cập nhật để phát hiện xung đột giữa gửi đơn và thanh toán; UI không tự ghi.
+- `demoBatch` và ghi chú dữ liệu mẫu là metadata tùy chọn, không thay thế trường nghiệp vụ.
+- Không đổi tên collection, enum hoặc biến trường bổ sung thành bắt buộc nếu chưa thống nhất với hai app còn lại.
+
+## 5. CHỮ KÝ HÀM CHUẨN TRONG packages/core/lib/services/ (CONTRACT)
+
+Các service đã có trong core. Danh sách dưới đây cùng phần bổ sung 5.9 là hợp đồng cho Dương và Trung; khi gọi phải đối chiếu chữ ký thực tế trong source.
 
 5.1. ClockService
 Future<void> syncClock(String uid)
@@ -220,7 +241,7 @@ Stream<List<ReservationModel>> watchCustomerReservations(String customerId)
 Stream<List<ReservationModel>> watchTodayConfirmedReservations()
 
 5.4. SessionService
-TableDisplayStatus computeDisplayStatus(TableModel table, SessionModel? activeSession, ReservationModel? nextRes, DateTime now)
+TableDisplayStatus computeDisplayStatus(TableModel table, SessionModel? activeSession, ReservationModel? nextRes, DateTime now, {AppConfig config = AppConfig.defaultConfig})
 
 Future<String> openSession({required String tableId, String? customerId, String customerName = 'Khách vãng lai', required String openedBy, required String openedByRole, String? reservationId})
 (Transaction: Kiểm tra bàn available, cắt thời lượng nếu vướng slots đặt sau, tạo session, đổi bàn sang occupied, nếu có reservationId thì chuyển reservation sang checked_in và tự động tạo Order đầu tiên từ preOrderItems — trạng thái confirmed nếu openedByRole != 'customer', ngược lại pending).
@@ -249,7 +270,7 @@ Future<String> submitOrder({required String sessionId, required String tableId, 
 
 Future<void> approveOrder(String sessionId, String orderId) (Chuyển pending -> confirmed, cộng total vào sessions.subtotal).
 
-Future<void> cancelOrder(String sessionId, String orderId, {required String reason}) (Nếu đơn đang confirmed thì trừ lại sessions.subtotal).
+Future<void> cancelOrder(String sessionId, String orderId, {required String reason}) (Trừ subtotal nếu đơn đã được tính tiền tạm tính: confirmed/preparing/ready/served; pending không trừ. Service chặn sửa phiên đã đóng và hủy đơn mang đi đã thanh toán).
 
 Future<void> updatePreparationStatus(String sessionId, String orderId, OrderStatus newStatus) (confirmed -> preparing -> ready -> served).
 
@@ -258,7 +279,7 @@ Stream<List<OrderModel>> watchSessionOrders(String sessionId)
 Stream<List<OrderModel>> watchAllOrdersByStatuses(List<OrderStatus> statuses) (Dùng collectionGroup('orders')).
 
 5.6. PaymentService
-Future<PaymentModel> payAndClose({required String sessionId, required String cashierId, required PaymentMethod method, String? customerId, int pointsUsed = 0})
+Future<PaymentModel> payAndClose({required String sessionId, required String cashierId, required PaymentMethod method, String? customerId, int pointsUsed = 0, int? expectedSubtotal, AppConfig? expectedConfig})
 (Transaction: Kiểm tra không còn đơn pending, tính giảm giá tối đa 50%, cộng điểm tích lũy + điểm thưởng earlyReleased + điểm thưởng preOrder, tạo payments, ghi log pointTx, đổi session -> paid, đổi table -> needs_cleaning, giải phóng các slots tương lai).
 
 5.7. AlarmService
@@ -266,12 +287,64 @@ Quản lý flutter_local_notifications + Vibration.
 
 Dùng Map<String, Set<int>> firedBySession = {} để theo dõi độc lập các mốc [15, 5, 0] phút của từng sessionId (đảm bảo máy Phục vụ và Quầy theo dõi 20 bàn cùng lúc không bị nuốt thông báo).
 
-Hàm Future<void> syncAlarmsForSession(SessionModel s) và void onTickCheck(List<SessionModel> activeSessions).
+Hàm `Future<void> syncAlarmsForSession(SessionModel s, {AppConfig config = AppConfig.defaultConfig})` và `void onTickCheck(List<SessionModel> activeSessions, {AppConfig config = AppConfig.defaultConfig})`. Các app truyền cấu hình hiện tại để đổi ngưỡng cảnh báo; mốc hết giờ là 0. Trạng thái đã báo được theo dõi riêng trên từng thiết bị.
 
 5.8. SeedService
-Future<void> seedInitialDataIfEmpty(): Tự động tạo config/app, 12 bàn mẫu (Tầng 1, Tầng 2), 10 món nước/bánh mẫu kèm Topping/Size, và hướng dẫn tạo 3 tài khoản mẫu (customer@cafe.com, waiter@cafe.com, counter@cafe.com).
+Future<void> seedInitialDataIfEmpty(): Tạo config/app nếu thiếu, 12 bàn mẫu nếu collection bàn rỗng, 10 món mẫu nếu collection menu rỗng. Không tự tạo tài khoản Firebase Authentication, không tự đặt lại ngày dữ liệu demo và không ghi đè dữ liệu hiện có.
 
-6. PHÂN CÔNG CHI TIẾT MÀN HÌNH CHO 3 THÀNH VIÊN
+### 5.9. API bổ sung đang có
+
+```dart
+// AuthService: chỉ trả về thành viên role customer hợp lệ.
+Future<UserModel?> findCustomerById(String uid);
+
+// ConfigService: validate; expected giúp phát hiện người khác vừa sửa cấu hình.
+Future<AppConfig> read({Transaction? transaction});
+Future<void> save(AppConfig config, {AppConfig? expected});
+
+// PaymentService
+static PaymentCalculationResult calculatePayment({
+  required int subtotal, int pointsUsed = 0,
+  bool earlyReleased = false, bool hasPreOrder = false,
+  AppConfig config = AppConfig.defaultConfig,
+});
+Future<PaymentModel> payTakeaway({
+  required String orderId, required String cashierId,
+  required PaymentMethod method, String? customerId, int pointsUsed = 0,
+  int? expectedSubtotal, AppConfig? expectedConfig,
+});
+Future<List<OrderItemModel>> getPaymentItems(String paymentId);
+Stream<PaymentModel?> watchSessionPayment(String sessionId);
+Stream<List<PaymentModel>> watchTodayPayments();
+
+// SessionService
+Stream<SessionModel?> watchSession(String sessionId);
+Stream<List<SessionModel>> watchActiveSessions();
+Stream<List<TableModel>> watchAllTables();
+Stream<List<RequestModel>> watchOpenRequests();
+Stream<List<SessionModel>> watchTodaySessions();
+
+// ReservationService / OrderService
+Stream<List<ReservationModel>> watchTodayNoShows();
+Future<void> toggleMenuItemAvailability(String itemId, bool available);
+```
+
+`ConfigService.save` bảo toàn các trường cấu hình lạ khi merge. Các tham số mới là tùy chọn nhằm giữ các lời gọi cũ hoạt động.
+
+Providers dùng chung: `currentUserProvider`, `appConfigProvider`, `allTablesProvider`, `activeSessionsProvider`, `openRequestsProvider`, `todayConfirmedReservationsProvider`, `todayNoShowsProvider`, `todaySessionsProvider`, `todayPaymentsProvider`, `menuItemsProvider`; các family `customerReservationsProvider`, `reservationByIdProvider`, `sessionStreamProvider`, `sessionOrdersProvider`, `ordersByStatusesProvider`. Khi gọi family bằng danh sách trạng thái, dùng danh sách const hoặc tham số ổn định, tránh tạo List mới mỗi lần build gây đăng ký stream liên tục.
+
+### 5.10. Quy tắc thanh toán và liên thông ba app
+
+1. Đơn do khách gửi là `pending`; duyệt đơn chuyển `confirmed` và cộng subtotal. Đơn do nhân viên/quầy tạo vào `confirmed`.
+2. Luồng phục vụ: `confirmed -> preparing -> ready -> served`. **Đã phục vụ không đồng nghĩa đã thanh toán**, không làm tăng doanh thu.
+3. Thanh toán tại bàn dùng `payAndClose`: transaction kiểm tra phiên active/billing, bàn vẫn trỏ đúng phiên, không còn đơn pending, tính lại món hợp lệ và kiểm tra thành viên/điểm/cấu hình. Khi thành công: lưu payment và snapshot, ghi điểm, phiên paid, bàn needs_cleaning, hoàn thành lịch đặt và giải phóng slot thuộc đúng lịch đặt. Phiên đã trả tiền không được trả lần hai.
+4. `expectedSubtotal`/`expectedConfig` chặn chốt tiền khi bản xem trước đã cũ. UI cần tải lại và yêu cầu xác nhận số tiền mới khi có thay đổi.
+5. Đổi điểm theo số điểm nguyên, không vượt tỷ lệ cấu hình và số dư thành viên. Điểm tích lũy tính theo tiền thực trả. Thưởng preorder chỉ khi reservation có món đặt trước, không chỉ vì có reservationId.
+6. Đơn mang đi dùng `payTakeaway`, chỉ khi ready/served. Thu tiền không đổi trạng thái phục vụ và không đóng bàn. Ready đã trả vẫn chờ giao; served chưa trả vẫn chờ thanh toán; served đã trả mới rời hàng đợi xử lý.
+7. `cash`, `qr`, `card` hiện là phương thức nhân viên xác nhận thủ công; chưa tích hợp cổng thanh toán hoặc xác nhận giao dịch ngân hàng tự động.
+8. `sweepNoShows()` phải được gọi để cập nhật no-show; hiện chưa có lịch chạy backend tự động. Không giả định Firestore tự đổi trạng thái khi quá giờ.
+
+## 6. PHÂN CÔNG CHI TIẾT MÀN HÌNH CHO 3 THÀNH VIÊN
 PHẦN A — TRƯỜNG (packages/core, firebase/, và apps/counter_app)
 Xây dựng toàn bộ packages/core (Constants, Models, Services, Providers) và firebase/ (firestore.rules, firestore.indexes.json).
 
@@ -289,7 +362,7 @@ Cột 3: Chi tiết hóa đơn của bàn đang chọn & Thông báo requests.
 
 UniversalQrScannerDialog: Quét mã QR đơn đặt trước (cafe://preorder/{resId} -> tự động mở bàn & duyệt đơn ngay), quét QR bàn, hoặc quét QR thành viên (cafe://member/{uid}).
 
-PaymentCheckoutModal: Chọn thành viên (quét QR hoặc tìm SĐT), nhập số điểm đổi, hiển thị điểm thưởng nhận được (thưởng trả bàn sớm / đặt trước), chọn phương thức (cash, qr, card), chốt thanh toán & xem bản in hóa đơn (InvoicePreviewDialog).
+PaymentCheckoutModal: Chọn thành viên (quét QR hoặc tìm SĐT), nhập số điểm đổi, hiển thị điểm thưởng nhận được, chọn phương thức (cash, qr, card), chốt thanh toán và xem hóa đơn trên màn hình (InvoicePreviewDialog). SavedInvoiceDialog mở lại snapshot hóa đơn đã lưu, không chạy thanh toán lần nữa. Demo dùng 3 laptop, không yêu cầu máy in/in hóa đơn vật lý.
 
 ManagerAdminScreen: Bật/tắt món available, chỉnh sửa thông số config/app, nút chạy SeedService, và thống kê doanh thu/số phiên/no-show trong ngày.
 
@@ -352,33 +425,15 @@ Tab 3: Yêu cầu từ bàn (requests) -> Xử lý khách gọi phục vụ, kh�
 
 ---
 
-### BƯỚC 2: Câu lệnh (Prompt) để từng người dán vào Antigravity
+### Hướng dẫn tiếp tục code
 
-Sau khi lưu file `PROJECT_SPEC.md` vào thư mục gốc của project, các bạn làm theo đúng thứ tự sau:
+Không khởi tạo lại monorepo hoặc ghi đè core từ prompt cũ. Pull code đã thống nhất, đọc spec và chữ ký service thực tế. Mỗi người làm trên nhánh riêng; thay đổi API/schema phải thống nhất với nhóm và giữ tương thích dữ liệu cũ.
 
-#### 1. Prompt dành cho TRƯỜNG (Chạy đầu tiên để dựng Base + App Quầy)
-*   **Lần chạy 1 (Dựng Base `packages/core` cho cả nhóm):**
-    > `@PROJECT_SPEC.md Tôi là Trường. Hãy đọc kỹ tài liệu thiết kế. Bây giờ hãy khởi tạo cấu trúc Monorepo, tạo file firebase/firestore.rules, firebase/firestore.indexes.json và code hoàn chỉnh toàn bộ gói packages/core (bao gồm constants, models, services, providers và barrel file core.dart) đúng 100% với các chữ ký hàm đã quy định trong Mục 3, 4, 5. Tạo sẵn khung placeholder cho theme và widgets để không bị lỗi compile. Đảm bảo code chuẩn Null Safety, không có lỗi cú pháp.`
-    *(Sau khi Antigravity chạy xong bước này, Trường push code lên Git để Dương và Trung pull về).*
-
-*   **Lần chạy 2 (Code `apps/counter_app` của Trường):**
-    > `@PROJECT_SPEC.md Tôi là Trường. Gói packages/core đã có sẵn. Bây giờ hãy code hoàn chỉnh ứng dụng apps/counter_app theo đúng đặc tả tại Mục 6 - PHẦN A (gồm CounterAuthScreen, PosDashboardScreen chia 3 cột, UniversalQrScannerDialog, PaymentCheckoutModal, InvoicePreviewDialog, và ManagerAdminScreen có nút Seed Data). Tuyệt đối chỉ sửa trong thư mục apps/counter_app và gọi dữ liệu thông qua packages/core.`
+- **Trường:** Tiếp tục counter_app và core/firebase trong phạm vi phân công; báo rõ kiểm thử và giới hạn còn lại.
+- **Dương:** Xây dựng customer_app cùng theme/widgets theo Phần B, dùng service/provider sẵn có và cùng Firebase project. Đọc appConfigProvider để hiển thị thời lượng/điểm động. Đề xuất API thiếu cho Trường, không tạo lại core.
+- **Trung:** Xây dựng waiter_app theo Phần C, dùng đúng service/schema/status. Đã phục vụ chỉ cập nhật order, không tự ghi payment hoặc cộng doanh thu. Đề xuất API thiếu cho Trường.
 
 ---
-
-#### 2. Prompt dành cho DƯƠNG BÙI (Sau khi pull Base của Trường về)
-> `@PROJECT_SPEC.md Tôi là Dương Bùi. Hãy đọc kỹ tài liệu thiết kế. Hãy thực hiện PHẦN B trong Mục 6:
-> 1. Hoàn thiện packages/core/lib/theme/app_colors.dart, app_theme.dart và packages/core/lib/widgets/ (countdown_timer_widget.dart, status_badge.dart).
-> 2. Code hoàn chỉnh ứng dụng apps/customer_app (gồm CustomerAuthScreen, CustomerHomeScreen, ReservationBookingScreen, MyReservationsScreen, TableQrScannerScreen, ActiveSessionScreen tích hợp đồng hồ đếm ngược + rung + gia hạn + trả bàn sớm + gọi món, và PointsAndHistoryScreen).
-> Lưu ý: Chỉ sửa trong packages/core/lib/(theme|widgets) và apps/customer_app/. Mọi logic Firestore phải gọi qua các Service trong packages/core.`
-
----
-
-#### 3. Prompt dành cho TRUNG (Sau khi pull Base của Trường về)
-> `@PROJECT_SPEC.md Tôi là Trung. Hãy đọc kỹ tài liệu thiết kế. Gói packages/core đã có sẵn. Hãy thực hiện PHẦN C trong Mục 6: Code hoàn chỉnh ứng dụng apps/waiter_app (gồm WaiterAuthScreen, FloorMapScreen hiển thị sơ đồ bàn đổi màu realtime mỗi giây kèm đồng hồ và báo rung đa bàn, TableActionSheet đầy đủ các thao tác Mở bàn vãng lai / Check-in hộ / Gia hạn / Chuyển bàn / Yêu cầu nhả bàn / Đã dọn xong, QuickOrderScreen và WaiterTaskHubScreen 3 tab).
-> Lưu ý: Tuyệt đối chỉ tạo và sửa file bên trong thư mục apps/waiter_app/, không sửa bất kỳ file nào ngoài thư mục này để tránh conflict Git.`
----
-
 ## 7. YÊU CẦU BẮT BUỘC CỦA MÔN HỌC PRM393 (CODING STANDARDS, TESTING & RELEASE)
 
 ### 7.1. Kiến trúc MVVM + Repository Pattern & Code Comments
@@ -399,4 +454,55 @@ Mỗi thành viên phải có thư mục `test/` trong phạm vi của mình và
 ### 7.3. Cấu hình Build Release APK
 - Cấu hình sẵn `android/app/build.gradle` của cả 3 app (bật quyền `INTERNET`, `VIBRATE`, `CAMERA`, `SCHEDULE_EXACT_ALARM`, `POST_NOTIFICATIONS` trong `AndroidManifest.xml`) để sẵn sàng chạy lệnh:
   `flutter build apk --release`
-```
+
+## 8. HIỆN TRẠNG TRIỂN KHAI VÀ NGHIỆM THU
+
+### 8.1. Đã triển khai trong code hiện tại
+
+- Core có models/services/providers cho đặt bàn, phiên bàn, món, yêu cầu, thanh toán, điểm và cấu hình động.
+- Counter có sơ đồ bàn theo zone, hàng đợi, xử lý món, đơn mang đi, tra thành viên, thanh toán và hóa đơn đã lưu. Màn hình rộng từ 1200px dùng ba cột; màn hình nhỏ dùng ba tab. Có tải/lỗi/thử lại và chặn thao tác lặp khi đang xử lý.
+- Manager có quản lý món, cấu hình, seed, thống kê trong ngày và mở lại hóa đơn. Route `/admin` chỉ cho manager; counter được chuyển về POS. Manager vẫn dùng được POS.
+- Customer/waiter trên nhánh hiện tại mới có README. Các màn hình Phần B/C là yêu cầu cần xây dựng, chưa phải chức năng đã nghiệm thu.
+
+### 8.2. Thống kê trong ngày
+
+| Chỉ số | Nguồn và cách tính |
+| --- | --- |
+| Doanh thu | Tổng payments.total theo paidAt hôm nay |
+| Số hóa đơn | Số payment trong cùng khoảng thời gian |
+| Số phiên bắt đầu | Sessions theo startedAt hôm nay, bỏ cancelled và đơn mang đi |
+| No-show | Reservations có status no_show và startTime hôm nay |
+
+“Hôm nay” là từ 00:00 đến trước 00:00 ngày kế tiếp, theo đồng hồ đã đồng bộ và múi giờ máy; nhóm demo thống nhất Asia/Saigon. Dữ liệu hôm qua vẫn còn trong Firestore nhưng không được cộng vào hôm nay. Chưa có bộ lọc khoảng ngày. Chạy lại app không xóa lịch sử; seed không đổi ngày dữ liệu mẫu.
+
+### 8.3. Firebase và dữ liệu demo chung
+
+- Mỗi app cấu hình platform của mình trên cùng project `cafe-73637`. Tài khoản Google quản trị Console và tài khoản đăng nhập app có quyền riêng.
+- Firebase Authentication UID phải khớp users/{uid} và role. SeedService không tạo tài khoản Auth; không giả định email ví dụ là tài khoản thật.
+- Đã có batch `demo_team_20261018_v1` gồm bàn nhiều trạng thái, phiên, lịch đặt/slot, đơn, requests, payment và pointTx cho hai app còn lại phát triển theo. Xem [hướng dẫn dữ liệu nhóm](docs/TEAM_DEMO_DATA.md). Mốc ngày giờ cố định sẽ hết hạn tự nhiên.
+- Không reset/xóa dữ liệu chung khi khởi động. Thêm/sửa dữ liệu dùng chung có thể thay đổi trạng thái bàn và thống kê trên máy khác.
+- Không lưu mật khẩu, service-account key hoặc token trong spec/Git. Quyền dữ liệu thực tế phụ thuộc Firebase Auth và Firestore Rules.
+
+### 8.4. Giới hạn cần xử lý trước khi tuyên bố hoàn thành
+
+- AuthViewModel còn đăng nhập mẫu cục bộ khi Firebase đăng nhập lỗi. Đây là chức năng demo, không phải tài khoản Firebase thật hoặc phân quyền hoàn chỉnh.
+- UI admin giới hạn manager nhưng rules cấu hình hiện vẫn cho manager/counter ghi. Cần thống nhất quyền và kiểm thử rules; route guard không thay thế kiểm soát backend.
+- CountdownTimerWidget dùng chung còn nội dung mặc định 15/30 phút. Customer/waiter cần đọc cấu hình và truyền vào tính trạng thái/cảnh báo; không giả định mọi UI đã tự cập nhật cấu hình động.
+- Chưa nghiệm thu ba app trên ba máy thật, quyền camera/thông báo/rung, từ chối quyền, lỗi mạng và Firebase Rules.
+- Android counter đã bổ sung scaffold/wrapper và cấu hình build nhưng APK release chưa xác nhận build thành công sau sự cố máy. Release signing hiện dùng debug key cho demo, chưa phải phát hành chính thức.
+
+### 8.5. Kiểm thử đã ghi nhận
+
+- Core: lần kiểm tra gần nhất 32 test pass, gồm trạng thái, slot, điểm, checkout và cấu hình vận hành.
+- Counter: 24 test pass với `flutter test --concurrency=1`; `flutter analyze` pass; build web release thành công bằng `flutter build web --release --no-wasm-dry-run`.
+- Test mới gồm POS UX và nghiệp vụ liên vai trò dùng Firestore giả trong test. Đây chưa phải E2E ba UI thật hoặc kiểm thử rules đã triển khai.
+- Customer/waiter cần bổ sung test Mục 7 khi có code. Chạy lại kiểm tra liên quan sau khi sửa source. Xem [README counter_app](apps/counter_app/README.md).
+
+### 8.6. Checklist tích hợp ba laptop
+
+1. Đồng bộ code/core đã commit, cùng Firebase project, tài khoản thật đúng role.
+2. Customer đặt bàn có món trước; counter/waiter check-in; đối chiếu phiên/slot/món.
+3. Customer gửi món pending; waiter duyệt; counter pha chế; waiter đánh dấu served; doanh thu chưa tăng.
+4. Counter thanh toán một lần; đối chiếu payment, điểm/log, phiên paid, bàn needs_cleaning; waiter dọn về available.
+5. Thử mang đi ready/served trước và sau thanh toán; mở lại hóa đơn không thu tiền lại.
+6. Thử đồng thời sửa cấu hình/gửi đơn/thanh toán, lỗi mạng, thiếu quyền và đổi ngày. Chỉ đánh dấu nghiệm thu khi có kết quả thực tế.
