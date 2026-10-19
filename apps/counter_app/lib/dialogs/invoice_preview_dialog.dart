@@ -21,9 +21,10 @@ class InvoicePreviewDialog extends StatelessWidget {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: 440,
+        width: 560,
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -72,34 +73,35 @@ class InvoicePreviewDialog extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 6),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${item.qty}x ${item.name}',
-                              style: const TextStyle(fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+              for (final item in items)
+                Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                  child: Text('${item.qty}x ${item.name}',
+                                      style: const TextStyle(fontSize: 13))),
+                              const SizedBox(width: 12),
+                              Text('${currencyFmt.format(item.totalPrice)} đ',
+                                  style: const TextStyle(fontSize: 13)),
+                            ]),
+                        if (item.selectedOptions.isNotEmpty)
                           Text(
-                            '${currencyFmt.format(item.totalPrice)} đ',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
+                              item.selectedOptions
+                                  .map((option) =>
+                                      '${option.groupName}: ${option.choiceName}')
+                                  .join(', '),
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey)),
+                        if (item.note?.isNotEmpty ?? false)
+                          Text('Ghi chú: ${item.note}',
+                              style: const TextStyle(fontSize: 12)),
+                      ],
+                    )),
               const Divider(thickness: 1, height: 20),
             ],
 
@@ -178,7 +180,7 @@ class InvoicePreviewDialog extends StatelessWidget {
               ],
             ),
           ],
-        ),
+        )),
       ),
     );
   }
@@ -190,16 +192,20 @@ class InvoicePreviewDialog extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: const TextStyle(fontSize: 13, color: Colors.black87)),
-          Text(
+          SizedBox(
+              width: 100,
+              child: Text(label,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87))),
+          Expanded(
+              child: SelectableText(
             value,
+            textAlign: TextAlign.right,
             style: TextStyle(
               fontSize: 13,
               fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
               color: valueColor ?? Colors.black,
             ),
-          ),
+          )),
         ],
       ),
     );

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:core/core.dart';
-import 'invoice_preview_dialog.dart';
+import 'saved_invoice_dialog.dart';
 import 'universal_qr_scanner_dialog.dart';
 
 /// Modal thanh toán và đóng phiên bàn dành cho Quầy POS.
@@ -165,35 +165,12 @@ class _PaymentCheckoutModalState extends ConsumerState<PaymentCheckoutModal> {
 
       if (!mounted) return;
       final navigator = Navigator.of(context);
-      final receipt = paymentService.getPaymentItems(payment.id);
       navigator.pop();
 
       // Mở hộp thoại xem hóa đơn
       showDialog(
         context: navigator.context,
-        builder: (ctx) => FutureBuilder<List<OrderItemModel>>(
-          future: receipt,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return InvoicePreviewDialog(
-                  payment: payment, items: snapshot.data!);
-            }
-            return AlertDialog(
-              title: const Text('Đã thanh toán thành công'),
-              content: snapshot.hasError
-                  ? Text(
-                      'Hóa đơn ${payment.id} đã lưu. Chưa tải được chi tiết: ${snapshot.error}')
-                  : const SizedBox(
-                      height: 60,
-                      child: Center(child: CircularProgressIndicator())),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Đóng'))
-              ],
-            );
-          },
-        ),
+        builder: (ctx) => SavedInvoiceDialog(payment: payment),
       );
     } catch (e) {
       if (!mounted) return;

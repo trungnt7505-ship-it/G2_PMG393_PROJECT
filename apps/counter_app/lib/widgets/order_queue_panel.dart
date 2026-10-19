@@ -11,6 +11,13 @@ import '../viewmodels/pos_dashboard_viewmodel.dart';
 /// và tạo nhanh đơn mang về (Takeaway).
 class OrderQueuePanel extends ConsumerWidget {
   const OrderQueuePanel({super.key});
+  static const _statuses = [
+    OrderStatus.pending,
+    OrderStatus.confirmed,
+    OrderStatus.preparing,
+    OrderStatus.ready,
+    OrderStatus.served
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,13 +26,7 @@ class OrderQueuePanel extends ConsumerWidget {
 
     // Lắng nghe tất cả các đơn hàng chưa hoàn tất phục vụ
     final ordersAsync = ref.watch(
-      ordersByStatusesProvider(const [
-        OrderStatus.pending,
-        OrderStatus.confirmed,
-        OrderStatus.preparing,
-        OrderStatus.ready,
-        OrderStatus.served,
-      ]),
+      ordersByStatusesProvider(_statuses),
     );
 
     final dashboardState = ref.watch(posDashboardViewModelProvider);
@@ -463,7 +464,14 @@ class OrderQueuePanel extends ConsumerWidget {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Lỗi tải hàng đợi: $e')),
+              error: (e, _) => Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Lỗi tải hàng đợi: $e'),
+                TextButton(
+                    onPressed: () =>
+                        ref.invalidate(ordersByStatusesProvider(_statuses)),
+                    child: const Text('Thử lại')),
+              ])),
             ),
           ),
         ],

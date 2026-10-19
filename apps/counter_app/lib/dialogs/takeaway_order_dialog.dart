@@ -36,11 +36,13 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.takeout_dining, color: AppColors.primary, size: 28),
+                    Icon(Icons.takeout_dining,
+                        color: AppColors.primary, size: 28),
                     SizedBox(width: 10),
                     Text(
                       'Tạo đơn mang đi (Takeaway)',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -56,9 +58,11 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
             Expanded(
               child: menuItemsAsync.when(
                 data: (items) {
-                  final availableItems = items.where((i) => i.available).toList();
+                  final availableItems =
+                      items.where((i) => i.available).toList();
                   if (availableItems.isEmpty) {
-                    return const Center(child: Text('Chưa có món nào sẵn sàng.'));
+                    return const Center(
+                        child: Text('Chưa có món nào sẵn sàng.'));
                   }
                   return ListView.separated(
                     itemCount: availableItems.length,
@@ -70,7 +74,8 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: Colors.brown.shade100,
-                          child: const Icon(Icons.local_cafe, color: AppColors.primary),
+                          child: const Icon(Icons.local_cafe,
+                              color: AppColors.primary),
                         ),
                         title: Text(
                           item.name,
@@ -104,7 +109,8 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
                               ),
                             ],
                             IconButton(
-                              icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                              icon: const Icon(Icons.add_circle,
+                                  color: AppColors.primary),
                               onPressed: () {
                                 setState(() {
                                   _selectedQuantities[item.id] = qty + 1;
@@ -151,7 +157,8 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text(
                             'Gửi đơn vào hàng đợi pha chế',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                   ),
                 ),
@@ -164,6 +171,7 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
   }
 
   Future<void> _submitTakeaway(List<MenuItemModel> allItems) async {
+    if (_isSubmitting) return;
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -185,21 +193,23 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
       }
 
       final orderService = ref.read(orderServiceProvider);
-      final currentUser = ref.read(currentUserProvider).value;
+      final currentUser = await ref.read(currentUserProvider.future);
+      if (currentUser == null) throw StateError('Vui lòng đăng nhập lại.');
 
       await orderService.submitOrder(
         sessionId: 'takeaway_orders',
         tableId: 'takeaway',
         tableName: 'Mang đi (Takeaway)',
         items: orderItems,
-        createdBy: currentUser?.displayName ?? 'Thu ngân',
+        createdBy: currentUser.id,
         createdByRole: 'counter',
         type: OrderType.takeaway,
       );
 
       if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Đã tạo đơn mang đi thành công và gửi sang hàng đợi!'),
         ),
@@ -213,4 +223,3 @@ class _TakeawayOrderDialogState extends ConsumerState<TakeawayOrderDialog> {
     }
   }
 }
-

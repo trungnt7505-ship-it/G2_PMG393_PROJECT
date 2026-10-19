@@ -36,31 +36,57 @@ class OrderDetailPanel extends ConsumerWidget {
       );
     }
 
-    final tables = ref.watch(allTablesProvider).value ?? [];
+    final tablesAsync = ref.watch(allTablesProvider);
+    final sessionsAsync = ref.watch(activeSessionsProvider);
+    final requestsAsync = ref.watch(openRequestsProvider);
+    final error =
+        tablesAsync.error ?? sessionsAsync.error ?? requestsAsync.error;
+    if (error != null) {
+      return Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Không tải được chi tiết bàn: $error'),
+        TextButton(
+            onPressed: () {
+              ref.invalidate(allTablesProvider);
+              ref.invalidate(activeSessionsProvider);
+              ref.invalidate(openRequestsProvider);
+            },
+            child: const Text('Thử lại')),
+      ]));
+    }
+    if (tablesAsync.isLoading ||
+        sessionsAsync.isLoading ||
+        requestsAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final tables = tablesAsync.requireValue;
     final table = tables.cast<TableModel?>().firstWhere(
           (t) => t?.id == selectedTableId,
           orElse: () => null,
         );
 
-    final activeSessions = ref.watch(activeSessionsProvider).value ?? [];
+    final activeSessions = sessionsAsync.requireValue;
     final activeSession = activeSessions.cast<SessionModel?>().firstWhere(
           (s) => s?.tableId == selectedTableId && s!.isActive,
           orElse: () => null,
         );
 
-    final openRequests = ref.watch(openRequestsProvider).value ?? [];
+    final openRequests = requestsAsync.requireValue;
     final tableRequests =
         openRequests.where((r) => r.tableId == selectedTableId).toList();
 
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(16),
-      child: Column(
+      child: SingleChildScrollView(
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header bàn
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +162,7 @@ class OrderDetailPanel extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              '• ${req.type == 'call_waiter' ? 'Khách gọi phục vụ' : req.type == 'request_bill' ? 'Khách xin tính tiền' : 'Trả bàn sớm'}: ${req.message}',
+                              '• ${req.type == 'call_waiter' ? 'Khách gọi phục vụ' : req.type == 'request_bill' ? 'Khách xin tính tiền' : req.type == 'release_table' ? 'Yêu cầu nhả bàn' : 'Trả bàn sớm'}: ${req.message}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
@@ -161,7 +187,8 @@ class OrderDetailPanel extends ConsumerWidget {
 
           // Thông tin phiên & Danh sách món
           if (activeSession == null) ...[
-            Expanded(
+            SizedBox(
+              height: 200,
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -180,8 +207,10 @@ class OrderDetailPanel extends ConsumerWidget {
             ),
           ] else ...[
             // Thông tin khách
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 Text(
                   'Khách: ${activeSession.customerName}',
@@ -197,8 +226,10 @@ class OrderDetailPanel extends ConsumerWidget {
             const SizedBox(height: 6),
 
             // Đồng hồ đếm ngược
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 const Text('Thời gian còn lại:',
                     style: TextStyle(fontSize: 13)),
@@ -216,7 +247,8 @@ class OrderDetailPanel extends ConsumerWidget {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             const SizedBox(height: 6),
-            Expanded(
+            SizedBox(
+              height: 300,
               child: Consumer(
                 builder: (context, ref, _) {
                   final sessionOrdersAsync =
@@ -310,8 +342,10 @@ class OrderDetailPanel extends ConsumerWidget {
             const Divider(height: 20),
 
             // Tổng tạm tính
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 const Text(
                   'TỔNG TẠM TÍNH:',
@@ -365,7 +399,7 @@ class OrderDetailPanel extends ConsumerWidget {
             ),
           ],
         ],
-      ),
+      )),
     );
   }
 }

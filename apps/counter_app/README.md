@@ -29,3 +29,25 @@ flutter build web --release
 
 Chạy thêm `flutter test` tại `packages/core` để kiểm tra transaction thanh toán, chống thanh toán lặp, cấu hình và thống kê. Kiểm thử Firestore dùng dữ liệu giả trong bộ nhớ, không ghi dữ liệu thử lên database chung.
 
+## Hóa đơn và giao diện laptop (phần 7–8)
+
+- Hóa đơn dài có thể cuộn, xem size/topping/ghi chú và chọn để sao chép mã hóa đơn. Không có thao tác gửi tới máy in.
+- Quản lý → Thống kê → chọn một hóa đơn trong danh sách hôm nay để xem lại. Nút **Thử lại** chỉ tải chi tiết, không thu tiền lần nữa.
+- Màn hình rộng từ 1200 px giữ ba cột; cửa sổ nhỏ hơn dùng ba tab Sơ đồ bàn / Pha chế / Chi tiết bàn. Chọn bàn sẽ chuyển sang tab chi tiết.
+- Bộ lọc khu vực đọc từ Firestore, gồm cả khu Demo tích hợp. Database trống hiển thị trạng thái trống, không tạo bàn giả trên giao diện.
+- Khi đang duyệt/hủy/chuyển trạng thái/xử lý yêu cầu, POS chặn thao tác lặp và hiển thị thanh tiến trình. Lỗi được báo bằng thông báo trên màn hình.
+- Nếu không mở được camera, có thể nhập nội dung QR thủ công.
+
+## Kiểm chứng phần 9
+
+```powershell
+flutter test --concurrency=1
+flutter build web --release --no-wasm-dry-run
+flutter build apk --release
+```
+
+- `pos_ux_test.dart`: bố cục 1366×768, 1024×600, 800×600; hóa đơn dài; thử lại tải biên lai; chống bấm lặp; database trống.
+- `cross_role_flow_test.dart`: dùng service thật trên Firestore giả lập, kiểm tra khách đặt món trước → quầy nhận QR → phục vụ duyệt/pha chế/giao món → yêu cầu tính tiền → thanh toán → điểm/thống kê/dọn bàn. Đây là kiểm thử hợp đồng service, không phải kiểm thử giao diện của ba ứng dụng thật hoặc Security Rules trên Firebase.
+- Hiện customer_app và waiter_app trên nhánh này mới có README. Sau khi hai app có code, cần chạy ba app trên ba laptop để kiểm tra đồng bộ trực tiếp, đăng nhập theo vai trò và camera thực tế.
+- Android đã bổ sung Gradle wrapper, Activity và resource còn thiếu. Gradle giới hạn 1536 MB heap và 2 worker để giảm tải. Lần build APK trước bị ngắt do máy crash; APK chưa được xác nhận tạo thành công. Chạy lại riêng lệnh build APK khi máy ổn định, tránh chạy cùng lúc nhiều build/test.
+

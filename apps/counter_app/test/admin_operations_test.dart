@@ -153,7 +153,7 @@ void main() {
       if (state == 'data') {
         expect(find.text('2 phiên'), findsOneWidget);
         expect(find.text('1 đơn'), findsOneWidget);
-        expect(find.textContaining('90.000'), findsOneWidget);
+        expect(find.textContaining('90.000'), findsWidgets);
       } else if (state == 'error') {
         expect(find.textContaining('Không tải được thống kê'), findsOneWidget);
         expect(find.text('0 đơn'), findsNothing);

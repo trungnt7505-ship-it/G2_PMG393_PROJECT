@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:core/core.dart';
 import '../widgets/app_config_form.dart';
+import '../dialogs/saved_invoice_dialog.dart';
 
 /// Màn hình Quản lý / Quản trị viên (ManagerAdminScreen):
 /// - Bật/tắt món ăn/nước uống còn hàng (`available`).
@@ -64,6 +65,7 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
         title: const Text('QUẢN TRỊ VIÊN & CẤU HÌNH HỆ THỐNG'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: MediaQuery.sizeOf(context).width < 700,
           indicatorColor: AppColors.accent,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
@@ -258,6 +260,26 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
               const SizedBox(height: 32),
               const Divider(),
               const SizedBox(height: 16),
+
+              const Text('Hóa đơn đã thanh toán hôm nay',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              if (payments.isEmpty)
+                const Text('Chưa có hóa đơn thanh toán hôm nay.'),
+              for (final payment in [
+                ...payments
+              ]..sort((a, b) => b.paidAt.compareTo(a.paidAt)))
+                ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                        '${payment.tableName} • ${currencyFmt.format(payment.total)} đ'),
+                    subtitle: Text(
+                        '${DateFormat('HH:mm').format(payment.paidAt)} • ${payment.id}'),
+                    trailing: const Icon(Icons.receipt_long),
+                    onTap: () => showDialog(
+                        context: context,
+                        builder: (_) => SavedInvoiceDialog(payment: payment))),
+              const Divider(height: 32),
 
               // Nút khởi tạo dữ liệu mẫu Seed Data
               const Text(
