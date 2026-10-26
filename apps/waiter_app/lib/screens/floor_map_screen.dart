@@ -39,7 +39,34 @@ class FloorMapScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: tablesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Lỗi tải dữ liệu bàn: $err')),
+        error: (err, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.refresh_rounded, size: 48, color: AppColors.primary),
+                const SizedBox(height: 12),
+                const Text(
+                  'Đang đồng bộ sơ đồ bàn...',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    ref.invalidate(allTablesProvider);
+                    ref.invalidate(activeSessionsProvider);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Tải lại'),
+                ),
+              ],
+            ),
+          ),
+        ),
         data: (allTables) {
           if (allTables.isEmpty) {
             return const Center(child: Text('Chưa có dữ liệu bàn trong hệ thống.'));
