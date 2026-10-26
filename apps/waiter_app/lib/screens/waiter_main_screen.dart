@@ -25,8 +25,9 @@ class _WaiterMainScreenState extends ConsumerState<WaiterMainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authViewModelUser = ref.watch(waiterAuthViewModelProvider).value;
     final currentUserAsync = ref.watch(currentUserProvider);
-    final currentUser = currentUserAsync.value;
+    final currentUser = authViewModelUser ?? currentUserAsync.value;
 
     final pendingOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.pending]));
     final readyOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.ready]));
