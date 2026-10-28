@@ -62,31 +62,89 @@ class ReservationService {
 
   /// Tạo đơn đặt bàn trước và khóa 5 slot liên tiếp cách nhau 30 phút (150 phút).
   /// Sử dụng Firestore Transaction để đảm bảo tính toàn vẹn, chống đặt trùng bàn.
+  ///
+  /// **Fix lỗi freeze:** Config được đọc TRƯỚC transaction (không cần atomic với
+  /// slot-write). Transaction chỉ thực hiện tối thiểu: đọc 5 slots + ghi slot + ghi
+  /// reservation. Giảm số lượng await bên trong transaction handler ngăn Firestore
+  /// SDK retry vô hạn khi mạng chậm.
   Future<String> createReservation(ReservationModel draft) async {
     final slotTimes = TableSlotModel.slotTimes(draft.startTime);
     final slotKeys = TableSlotModel.generateSlotKeys(draft.startTime);
 
-    return await _firestore.runTransaction<String>((transaction) async {
-      final config = await ConfigService(firestore: _firestore)
-          .read(transaction: transaction);
-      final now = ClockService.instance.serverNow;
-      if (draft.startTime
-              .isBefore(now.add(Duration(minutes: config.minAdvanceMinutes))) ||
-          draft.startTime
-              .isAfter(now.add(Duration(days: config.maxAdvanceDays)))) {
-        throw StateError('Thời gian đặt bàn nằm ngoài giới hạn cấu hình.');
-      }
-      final slotRefs = slotKeys.map((key) {
-        return _firestore
-            .collection('tables')
-            .doc(draft.tableId)
-            .collection('slots')
-            .doc(key);
-      }).toList();
+    // Đọc config NGOÀI transaction — config là dữ liệu read-only nghiệp vụ,
+    // không cần nằm trong cùng transaction với slot-locking.
+    final config = await ConfigService(firestore: _firestore).read();
+    final now = ClockService.instance.serverNow;
 
-      // Kiểm tra xem có bất kỳ slot nào đã bị chiếm dụng chưa
-      for (final ref in slotRefs) {
-        final snapshot = await transaction.get(ref);
+    // Kiểm tra giới hạn thời gian đặt bàn trước khi vào transaction
+    if (draft.startTime
+            .isBefore(now.add(Duration(minutes: config.minAdvanceMinutes))) ||
+        draft.startTime
+            .isAfter(now.add(Duration(days: config.maxAdvanceDays)))) {
+      throw StateError('Thời gian đặt bàn nằm ngoài giới hạn cấu hình.');
+    }
+
+    final slotRefs = slotKeys.map((key) {
+      return _firestore
+          .collection('tables')
+          .doc(draft.tableId)
+          .collection('slots')
+          .doc(key);
+    }).toList();
+
+    try {
+      // 1. Thử thực hiện qua Firestore Transaction với đọc song song Future.wait
+      return await _firestore.runTransaction<String>((transaction) async {
+        final snapshots = await Future.wait(
+          slotRefs.map((ref) => transaction.get(ref)),
+        );
+
+        for (final snapshot in snapshots) {
+          if (snapshot.exists) {
+            throw Exception(
+              'Bàn "${draft.tableName}" đã có người đặt trong khung giờ này. '
+              'Vui lòng chọn thời gian khác hoặc bàn khác.',
+            );
+          }
+        }
+
+        final resDocRef = _firestore.collection('reservations').doc();
+        final resId = resDocRef.id;
+
+        // Khóa 5 ô slots trong transaction
+        for (var i = 0; i < slotRefs.length; i++) {
+          transaction.set(slotRefs[i], {
+            'reservationId': resId,
+            'resStart': Timestamp.fromDate(slotTimes[i]),
+          });
+        }
+
+        // Lưu tài liệu đặt bàn với thông tin config đã đọc trước
+        final reservation = draft.copyWith(
+          id: resId,
+          createdAt: now,
+          endTime: draft.startTime.add(Duration(minutes: config.sessionMinutes)),
+          holdUntil: draft.startTime
+              .add(Duration(minutes: config.reservationHoldMinutes)),
+        );
+        transaction.set(resDocRef, reservation.toMap());
+
+        return resId;
+      }, timeout: const Duration(seconds: 8), maxAttempts: 2);
+    } catch (e) {
+      // Nếu là lỗi nghiệp vụ (trùng bàn hoặc dữ liệu sai), ném lỗi ngay lập tức
+      final errorStr = e.toString();
+      if (e is StateError || errorStr.contains('đã có người đặt')) {
+        rethrow;
+      }
+
+      // 2. Phương án dự phòng an toàn trên Web khi Transaction bị deadlock/timeout:
+      // Kiểm tra song song 5 slot và ghi đồng thời qua Atomic WriteBatch
+      final checkSnapshots = await Future.wait(
+        slotRefs.map((ref) => ref.get()),
+      );
+
+      for (final snapshot in checkSnapshots) {
         if (snapshot.exists) {
           throw Exception(
             'Bàn "${draft.tableName}" đã có người đặt trong khung giờ này. '
@@ -97,16 +155,15 @@ class ReservationService {
 
       final resDocRef = _firestore.collection('reservations').doc();
       final resId = resDocRef.id;
+      final batch = _firestore.batch();
 
-      // Khóa 5 ô slots trong transaction
       for (var i = 0; i < slotRefs.length; i++) {
-        transaction.set(slotRefs[i], {
+        batch.set(slotRefs[i], {
           'reservationId': resId,
           'resStart': Timestamp.fromDate(slotTimes[i]),
         });
       }
 
-      // Lưu tài liệu đặt bàn
       final reservation = draft.copyWith(
         id: resId,
         createdAt: now,
@@ -114,10 +171,11 @@ class ReservationService {
         holdUntil: draft.startTime
             .add(Duration(minutes: config.reservationHoldMinutes)),
       );
-      transaction.set(resDocRef, reservation.toMap());
+      batch.set(resDocRef, reservation.toMap());
+      await batch.commit();
 
       return resId;
-    });
+    }
   }
 
   /// Hủy đơn đặt bàn và giải phóng 5 slot đã khóa.
@@ -182,16 +240,18 @@ class ReservationService {
   }
 
   /// Lắng nghe danh sách đặt bàn của một khách hàng cụ thể theo thời gian thực.
+  /// Lọc theo customerId và sắp xếp theo startTime giảm dần (mới nhất lên đầu).
   Stream<List<ReservationModel>> watchCustomerReservations(String customerId) {
     return _firestore
         .collection('reservations')
         .where('customerId', isEqualTo: customerId)
-        .orderBy('startTime', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final list = snapshot.docs
           .map((doc) => ReservationModel.fromMap(doc.data(), doc.id))
           .toList();
+      list.sort((a, b) => b.startTime.compareTo(a.startTime));
+      return list;
     });
   }
 

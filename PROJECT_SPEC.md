@@ -367,31 +367,36 @@ PaymentCheckoutModal: Chọn thành viên (quét QR hoặc tìm SĐT), nhập s�
 ManagerAdminScreen: Bật/tắt món available, chỉnh sửa thông số config/app, nút chạy SeedService, và thống kê doanh thu/số phiên/no-show trong ngày.
 
 PHẦN B — DƯƠNG BÙI (packages/core/lib/theme|widgets và apps/customer_app)
-Xây dựng packages/core/lib/theme/app_colors.dart (6 màu chuẩn cho 6 trạng thái TableDisplayStatus: Trống = Xanh lá, Sắp có khách đặt = Tím, Đang dùng = Xanh dương, Sắp hết giờ <=15p = Cam, Quá giờ = Đỏ, Chờ dọn = Xám) và countdown_timer_widget.dart.
+### Phạm vi và trạng thái đối chiếu mã nguồn (19/10/2026)
 
-Xây dựng apps/customer_app (Tối ưu giao diện Mobile dọc):
+Phạm vi sửa của Dương gồm `packages/core/lib/theme/`, `packages/core/lib/widgets/` và `apps/customer_app/`. Không sửa schema/service/provider/rules thuộc Phần A; nếu thiếu nghiệp vụ, ghi đề xuất API để nhóm thống nhất. Mọi truy cập dữ liệu phải đi qua core service/provider, không gọi Firestore trực tiếp trong màn hình.
 
-CustomerAuthScreen: Đăng nhập, Đăng ký tài khoản khách hàng.
+**Đã có trong core:** `AppColors`, `AppTheme`, `CountdownTimerWidget`, `StatusBadge` và barrel export. Countdown nhận thời điểm hết hạn, màu/ngưỡng cảnh báo và callback gia hạn; ứng dụng phải truyền cấu hình hiện tại thay vì dựa vào ngưỡng mặc định. Các API tích hợp nằm ở `docs/BACKEND_API.md`.
 
-CustomerHomeScreen: Hiển thị Thẻ thành viên + Điểm tích lũy + Mã QR thành viên (cafe://member/{uid}), Thẻ "Phiên bàn hiện tại" (nếu đang ngồi), nút "Đặt bàn & Đặt món trước", nút "Quét QR tại bàn".
+**Trạng thái triển khai customer_app (22/10/2026):** đã có đăng nhập/đăng ký email, Google, đặt lại mật khẩu, hồ sơ/điểm, QR thành viên, menu, đặt và hủy bàn, danh sách đặt bàn, check-in bằng payload QR, phiên đang dùng với countdown/gia hạn/trả sớm/gọi phục vụ/yêu cầu hóa đơn và gửi món đơn giản. Lỗi stream hồ sơ sau khi Auth đã logout được xử lý bằng cách đưa UI về màn hình đăng nhập khi UID hiện tại đã nul  l.
 
-ReservationBookingScreen: Chọn ngày/giờ (bước 30p), số người -> Lọc bàn trống -> Chọn món đặt trước (preOrderItems kèm Size/Topping) -> Xác nhận tạo đặt chỗ & Hiển thị mã QR Đơn đặt trước (cafe://preorder/{resId}) để đưa cho quầy hoặc dùng check-in tại bàn.
+### Màn hình và hành vi cần hoàn thành
 
-MyReservationsScreen: Danh sách lịch hẹn, xem mã QR đặt trước, hủy lịch hẹn, nút "Quét QR Nhận bàn".
+Ứng dụng tối ưu mobile dọc, tuân thủ MVVM + Service/Repository, có trạng thái loading/error/empty và phản hồi lỗi quyền/mạng. Các class/màn hình chính có DartDoc như Mục 7. Không để Firebase CRUD trong widget.
 
-TableQrScannerScreen: Quét mã QR tại bàn (cafe://table/{tableId}?k={qrSecret}) để Check-in lịch hẹn hoặc Tự mở bàn mới.
+1. **CustomerAuthScreen:** đăng nhập qua `AuthService.signInWithEmail(... allowedRoles: [UserRole.customer])`; đăng ký qua `registerCustomer`; khôi phục trạng thái qua `currentUserProvider`; đăng xuất qua `signOut`. Không dùng đăng nhập giả khi Firebase lỗi.
+2. **CustomerHomeScreen:** thẻ thành viên, điểm, QR `cafe://member/{uid}`, phiên đang dùng nếu có, lối vào đặt bàn và quét QR. QR thành viên chỉ mang UID; quầy phải xác minh UID/role bằng AuthService, không tin dữ liệu QR như quyền xác thực.
+3. **ReservationBookingScreen:** chọn thời gian, nhập số khách, gọi `getAvailableTables`, chọn bàn rồi `createReservation`; service kiểm tra giới hạn và transaction khóa slot. Hiển thị URI QR `cafe://preorder/{resId}` sau khi thành công. Chọn món/tùy chọn đặt trước chưa có UI.
+4. **MyReservationsScreen:** dùng `customerReservationsProvider`, hiển thị lịch và QR; hủy qua `cancelReservation`; hỗ trợ đi đến luồng nhận bàn. Không tự sửa document reservation.
+5. **TableQrScannerScreen:** hiện nhận URI QR nhập/dán và gọi `checkInByTableQr`; service kiểm tra định dạng, secret và trạng thái bàn. Camera permission có trong Android manifest nhưng app chưa tích hợp camera scanner/plugin.
+6. **ActiveSessionScreen:** theo dõi session/orders, countdown theo core clock, khởi tạo/sync AlarmService, gia hạn, trả sớm, gọi phục vụ, yêu cầu thanh toán và gửi món chưa cần tùy chọn. UI món yêu cầu option bắt buộc đang được ẩn; các màn nhắc giờ nền theo mọi mốc config cần kiểm tra thêm trên thiết bị.
+7. **PointsAndHistoryScreen:** lịch sử pointTx và thanh toán của khách hiện chưa có API stream chuyên biệt trong core. Đề xuất bổ sung API có kiểm soát quyền trước khi triển khai; không dùng truy vấn Firestore trực tiếp ở UI. Không hiển thị dữ liệu payment của khách khác.
 
-ActiveSessionScreen:
+**Còn thiếu để nghiệm thu:** PointsAndHistoryScreen (core chưa có API stream lịch sử an toàn), camera scanner thật, lựa chọn món/tùy chọn đặt trước, lựa chọn option khi gọi món, test widget CountdownTimerWidget/UI, Android Firebase options customer-specific và xác nhận quyền/rung/notification trên thiết bị thật.
 
-Đồng hồ đếm ngược lớn ở trung tâm, tự động rung Haptic (Vibration) và hiện Dialog khi chạm mốc 15', 5', 0' hoặc khi nhận request release_table từ nhân viên.
+### Tiêu chí hoàn thành Phần B
 
-Nút "Gia hạn +30 phút" (sáng lên khi còn <= 15p) và nút "Trả bàn sớm (+20 điểm)" (khi còn >= 30p).
+- `apps/customer_app` có cấu hình Flutter phụ thuộc `packages/core` và Firebase initialization cho project `cafe-73637`; cần bổ sung runner Android/customer-specific Firebase options và các màn hình nghiệp vụ trên.
+- Có widget test cho CountdownTimerWidget theo Mục 7.2; kiểm tra đúng `HH:mm:ss`, màu cảnh báo khi đến ngưỡng cấu hình và callback/nút gia hạn. Kiểm tra/analyze/build theo quy trình nhóm trước khi nghiệm thu.
+- Luồng đặt bàn, check-in, gọi món và yêu cầu thanh toán dùng đúng core contract; không ghi Firestore trực tiếp. Test UI nên mock/fake provider, không đụng dữ liệu Firebase demo chung.
+- Cập nhật README customer_app với cách chạy và cấu hình platform; xác nhận quyền camera, rung, notification trên thiết bị thật trước khi tuyên bố nghiệm thu.
 
-Tab gọi thêm món tại bàn (Menu -> Cart -> submitOrder) và theo dõi tiến độ món realtime (pending -> confirmed -> preparing -> ready -> served).
-
-Nút "Gọi phục vụ" và "Yêu cầu thanh toán".
-
-PointsAndHistoryScreen: Lịch sử cộng/trừ điểm (pointTx) và danh sách hóa đơn cũ.
+Chi tiết backend, tình trạng kết nối, schema, API và giới hạn xác minh được ghi tại [docs/BACKEND_API.md](docs/BACKEND_API.md).
 
 PHẦN C — TRUNG (apps/waiter_app)
 Xây dựng apps/waiter_app (Tối ưu thao tác nhanh 1 tay cho Nhân viên phục vụ):

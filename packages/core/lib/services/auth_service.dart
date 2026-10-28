@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
 import '../constants/enums.dart';
 import '../models/user_model.dart';
 import 'clock_service.dart';
@@ -80,6 +82,67 @@ class AuthService {
     return user;
   }
 
+  /// Signs in a customer with Google on web and creates their Firestore profile
+  /// on first sign-in. Other roles are rejected to keep app access separated.
+  Future<UserModel> signInWithGoogle({
+    required List<UserRole> allowedRoles,
+  }) async {
+    late final UserCredential credential;
+    if (kIsWeb) {
+      credential = await _auth.signInWithPopup(GoogleAuthProvider());
+    } else {
+      final googleAccount = await GoogleSignIn().signIn();
+      if (googleAccount == null) {
+        throw Exception('Google sign-in was cancelled.');
+      }
+      final googleTokens = await googleAccount.authentication;
+      credential = await _auth.signInWithCredential(
+        GoogleAuthProvider.credential(
+          accessToken: googleTokens.accessToken,
+          idToken: googleTokens.idToken,
+        ),
+      );
+    }
+    final firebaseUser = credential.user;
+    if (firebaseUser == null) {
+      throw Exception('Google sign-in did not return a user account.');
+    }
+
+    final userRef = _firestore.collection('users').doc(firebaseUser.uid);
+    final snapshot = await userRef.get();
+    late final UserModel user;
+    if (snapshot.exists && snapshot.data() != null) {
+      user = UserModel.fromMap(snapshot.data()!, snapshot.id);
+    } else {
+      user = UserModel(
+        id: firebaseUser.uid,
+        role: UserRole.customer.name,
+        displayName: firebaseUser.displayName ?? '',
+        phone: '',
+        email: firebaseUser.email ?? '',
+        points: 0,
+        fcmTokens: const [],
+        createdAt: DateTime.now(),
+      );
+      await userRef.set(user.toMap());
+    }
+
+    if (!allowedRoles.contains(user.userRole)) {
+      await _auth.signOut();
+      throw Exception(
+        'This account role (${user.role}) cannot access this application.',
+      );
+    }
+
+    await ClockService.instance.syncClock(firebaseUser.uid);
+    return user;
+  }
+
+  /// Sends a Firebase password reset email for [email].
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email.trim());
+  }
+
   /// Đăng ký tài khoản Khách hàng mới với vai trò mặc định là `customer`.
   Future<UserModel> registerCustomer({
     required String email,
@@ -121,6 +184,7 @@ class AuthService {
   /// Đăng xuất tài khoản khỏi thiết bị.
   Future<void> signOut() async {
     await _auth.signOut();
+    if (!kIsWeb) await GoogleSignIn().signOut();
   }
 
   /// Tra cứu thành viên theo UID từ QR; không nhận tài khoản nhân viên.
