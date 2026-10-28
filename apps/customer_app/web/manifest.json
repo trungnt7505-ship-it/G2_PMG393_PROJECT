@@ -1,0 +1,11 @@
+{
+  "name": "Cafe Customer",
+  "short_name": "Cafe",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6f4e37",
+  "description": "Cafe customer application",
+  "orientation": "portrait",
+  "prefer_related_applications": false
+}

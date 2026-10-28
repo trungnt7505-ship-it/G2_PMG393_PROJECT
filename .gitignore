@@ -37,6 +37,9 @@ migrate_working_dir/
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
+!apps/customer_app/android/gradlew
+!apps/customer_app/android/gradlew.bat
+!apps/customer_app/android/gradle/wrapper/gradle-wrapper.jar
 
 # iOS/macOS related
 **/ios/**/*.mode1v3
