@@ -21,12 +21,13 @@ class FloorMapState {
     String? selectedZone,
     bool? isLoading,
     String? errorMessage,
+    bool clearError = false,
   }) {
     return FloorMapState(
       now: now ?? this.now,
       selectedZone: selectedZone ?? this.selectedZone,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
@@ -67,7 +68,7 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
     required String openedByRole,
     String customerName = 'Khách vãng lai',
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       final sessionId = await _sessionService.openSession(
         tableId: tableId,
@@ -78,7 +79,7 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
       state = state.copyWith(isLoading: false);
       return sessionId;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return null;
     }
   }
@@ -92,7 +93,7 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
     required String customerName,
     String? customerId,
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       final sessionId = await _sessionService.openSession(
         tableId: tableId,
@@ -105,20 +106,20 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
       state = state.copyWith(isLoading: false);
       return sessionId;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return null;
     }
   }
 
   /// Gia hạn phiên ngồi thêm 30 phút.
   Future<bool> extendSession(String sessionId, String waiterUid) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _sessionService.extendSession(sessionId, byUid: waiterUid);
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return false;
     }
   }
@@ -128,7 +129,7 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
     required String sessionId,
     required String newTableId,
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _sessionService.switchTable(
         sessionId: sessionId,
@@ -137,7 +138,7 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return false;
     }
   }
@@ -150,7 +151,7 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
     required String createdBy,
     String message = 'Bàn đã hết thời lượng sử dụng hoặc sắp tới giờ khách đặt tiếp theo. Xin quý khách vui lòng thanh toán hoặc nhả bàn.',
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _sessionService.sendTableRequest(
         sessionId: sessionId,
@@ -163,33 +164,33 @@ class FloorMapViewModel extends StateNotifier<FloorMapState> {
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return false;
     }
   }
 
   /// Hủy phiên mở nhầm của bàn.
   Future<bool> cancelMistakenSession(String sessionId) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _sessionService.cancelMistakenSession(sessionId);
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return false;
     }
   }
 
   /// Xóa trạng thái chờ dọn, chuyển bàn về Bàn trống.
   Future<bool> markTableCleaned(String tableId) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _sessionService.markTableCleaned(tableId);
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: e is StateError ? e.message.toString() : e.toString());
       return false;
     }
   }

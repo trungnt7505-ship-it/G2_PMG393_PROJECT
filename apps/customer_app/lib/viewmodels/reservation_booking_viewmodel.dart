@@ -188,7 +188,7 @@ class ReservationBookingViewModel extends StateNotifier<ReservationBookingState>
       );
       return resId;
     } catch (e) {
-      final msg = e.toString().contains('TimeoutException')
+      final msg = e is StateError ? e.message.toString() : e.toString().contains('TimeoutException')
           ? 'Hết thời gian chờ kết nối máy chủ. Vui lòng kiểm tra lại mạng.'
           : e.toString().replaceAll('Exception: ', '').replaceAll('StateError: ', '');
       state = state.copyWith(

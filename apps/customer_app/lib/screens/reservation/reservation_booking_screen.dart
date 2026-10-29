@@ -515,10 +515,13 @@ class _ReservationBookingScreenState
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.black12),
               ),
-              child: QrImageView(
-                data: qrPayload,
-                version: QrVersions.auto,
-                size: 160,
+              child: SizedBox.square(
+                dimension: 160,
+                child: QrImageView(
+                  data: qrPayload,
+                  version: QrVersions.auto,
+                  size: 160,
+                ),
               ),
             ),
             const SizedBox(height: 12),

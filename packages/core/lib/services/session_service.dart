@@ -105,6 +105,29 @@ class SessionService {
   }) async {
     final now = ClockService.instance.serverNow;
 
+    // Preflight avoids wrapping business errors in the web transaction bridge.
+    // The transaction still validates the reservation before writing.
+    if (reservationId != null) {
+      final snapshot = await _firestore.collection('reservations').doc(reservationId).get();
+      if (!snapshot.exists) throw StateError('Không tìm thấy đặt bàn để nhận bàn.');
+      final reservation = ReservationModel.fromMap(snapshot.data()!, snapshot.id);
+      final config = await ConfigService(firestore: _firestore).read();
+      final earliest = reservation.startTime.subtract(Duration(minutes: config.checkInEarlyMinutes));
+      String format(DateTime value) {
+        final local = value.toLocal();
+        return '${local.day}/${local.month} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+      }
+      if (reservation.reservationStatus != ReservationStatus.confirmed || reservation.tableId != tableId) {
+        throw StateError('Đặt bàn không còn chờ nhận hoặc không thuộc bàn đã chọn.');
+      }
+      if (now.isBefore(earliest)) {
+        throw StateError('Chưa đến giờ check-in. Có thể nhận bàn từ ${format(earliest)}.');
+      }
+      if (now.isAfter(reservation.holdUntil)) {
+        throw StateError('Đã quá hạn giữ bàn lúc ${format(reservation.holdUntil)}.');
+      }
+    }
+
     return await _firestore.runTransaction<String>((transaction) async {
       final config = await ConfigService(firestore: _firestore)
           .read(transaction: transaction);

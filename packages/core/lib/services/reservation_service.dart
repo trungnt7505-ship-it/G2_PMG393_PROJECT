@@ -63,6 +63,15 @@ class ReservationService {
   /// Tạo đơn đặt bàn trước và khóa 5 slot liên tiếp cách nhau 30 phút (150 phút).
   /// Sử dụng Firestore Transaction để đảm bảo tính toàn vẹn, chống đặt trùng bàn.
   Future<String> createReservation(ReservationModel draft) async {
+    // Report invalid times before entering the web transaction bridge.
+    final bookingConfig = await ConfigService(firestore: _firestore).read();
+    final bookingNow = ClockService.instance.serverNow;
+    if (draft.startTime.isBefore(bookingNow.add(Duration(minutes: bookingConfig.minAdvanceMinutes)))) {
+      throw StateError('Vui lòng đặt trước ít nhất ${bookingConfig.minAdvanceMinutes} phút tính từ lúc xác nhận.');
+    }
+    if (draft.startTime.isAfter(bookingNow.add(Duration(days: bookingConfig.maxAdvanceDays)))) {
+      throw StateError('Chỉ được đặt bàn trước tối đa ${bookingConfig.maxAdvanceDays} ngày.');
+    }
     final slotTimes = TableSlotModel.slotTimes(draft.startTime);
     final slotKeys = TableSlotModel.generateSlotKeys(draft.startTime);
 
