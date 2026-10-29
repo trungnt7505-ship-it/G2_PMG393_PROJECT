@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:core/core.dart';
@@ -18,7 +19,7 @@ void main() async {
   }
 
   // Khởi tạo dịch vụ chuông báo và rung Haptic
-  await AlarmService.instance.init();
+  if (!kIsWeb) await AlarmService.instance.init();
 
   // Bắt lỗi render để hiển thị giao diện thân thiện thay vì màn hình đỏ
   ErrorWidget.builder = (FlutterErrorDetails details) {

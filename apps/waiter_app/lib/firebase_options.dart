@@ -40,12 +40,5 @@ class DefaultFirebaseOptions {
   );
 
   // Cấu hình Windows
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDemoCafeSystemKeyForPRM393Win123',
-    appId: '1:123456789012:web:abcdef1234567890win',
-    messagingSenderId: '123456789012',
-    projectId: 'cafe-system-prm393',
-    authDomain: 'cafe-system-prm393.firebaseapp.com',
-    storageBucket: 'cafe-system-prm393.appspot.com',
-  );
+  static const FirebaseOptions windows = web;
 }

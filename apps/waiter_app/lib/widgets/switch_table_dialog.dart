@@ -38,11 +38,12 @@ class _SwitchTableDialogState extends State<SwitchTableDialog> {
             if (widget.availableTables.isEmpty)
               const Text(
                 'Không có bàn nào đang trống trong hệ thống.',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               )
             else
               DropdownButtonFormField<TableModel>(
-                value: _selectedTable,
+                initialValue: _selectedTable,
                 decoration: const InputDecoration(
                   labelText: 'Chọn bàn trống mới',
                   border: OutlineInputBorder(),
@@ -50,7 +51,8 @@ class _SwitchTableDialogState extends State<SwitchTableDialog> {
                 items: widget.availableTables.map((tbl) {
                   return DropdownMenuItem<TableModel>(
                     value: tbl,
-                    child: Text('${tbl.name} (${tbl.zone} - ${tbl.capacity} chỗ)'),
+                    child:
+                        Text('${tbl.name} (${tbl.zone} - ${tbl.capacity} chỗ)'),
                   );
                 }).toList(),
                 onChanged: (val) {

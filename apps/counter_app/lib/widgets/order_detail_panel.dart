@@ -366,6 +366,13 @@ class OrderDetailPanel extends ConsumerWidget {
             // Nút mở modal thanh toán
             ElevatedButton.icon(
               onPressed: () {
+                final checkoutOrders = ref.read(sessionOrdersProvider(activeSession.id));
+                if (checkoutOrders.isLoading || checkoutOrders.hasError ||
+                    (checkoutOrders.valueOrNull ?? []).any((order) => order.orderStatus == OrderStatus.pending)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Vui lòng tải và duyệt/từ chối hết đơn chờ trước khi thanh toán.')));
+                  return;
+                }
                 final orders =
                     ref.read(sessionOrdersProvider(activeSession.id)).value ??
                         [];

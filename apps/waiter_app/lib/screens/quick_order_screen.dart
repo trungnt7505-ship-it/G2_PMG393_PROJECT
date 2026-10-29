@@ -34,14 +34,15 @@ class _QuickOrderScreenState extends ConsumerState<QuickOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormatter = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+    final currencyFormatter =
+        NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
     final menuItemsAsync = ref.watch(menuItemsProvider);
     final currentUserAsync = ref.watch(currentUserProvider);
 
     final orderState = ref.watch(quickOrderViewModelProvider);
     final orderViewModel = ref.read(quickOrderViewModelProvider.notifier);
 
-    final currentUser = currentUserAsync.value;
+    final currentUser = currentUserAsync.valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -53,7 +54,8 @@ class _QuickOrderScreenState extends ConsumerState<QuickOrderScreen> {
             TextButton.icon(
               onPressed: () => orderViewModel.clearCart(),
               icon: const Icon(Icons.delete_sweep, color: Colors.white),
-              label: const Text('Xóa đơn', style: TextStyle(color: Colors.white)),
+              label:
+                  const Text('Xóa đơn', style: TextStyle(color: Colors.white)),
             ),
         ],
       ),
@@ -83,7 +85,8 @@ class _QuickOrderScreenState extends ConsumerState<QuickOrderScreen> {
               // Thanh Lọc Danh mục và Ô Tìm kiếm
               Container(
                 color: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Column(
                   children: [
                     TextField(
@@ -331,8 +334,8 @@ class _QuickOrderScreenState extends ConsumerState<QuickOrderScreen> {
                               IconButton(
                                 icon: const Icon(Icons.remove_circle_outline,
                                     size: 18, color: Colors.red),
-                                onPressed: () => orderViewModel
-                                    .decreaseItemQty(index),
+                                onPressed: () =>
+                                    orderViewModel.decreaseItemQty(index),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                               ),
@@ -359,7 +362,7 @@ class _QuickOrderScreenState extends ConsumerState<QuickOrderScreen> {
                                 waiterUid: currentUser?.id ?? 'waiter_demo',
                               );
 
-                              if (ok && mounted) {
+                              if (ok && context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(

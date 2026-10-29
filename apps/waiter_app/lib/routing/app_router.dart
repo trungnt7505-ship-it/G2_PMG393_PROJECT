@@ -14,10 +14,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     redirect: (context, state) {
-      final user = authState.value ?? currentUserAsync.value;
+      final user = authState.valueOrNull ?? currentUserAsync.valueOrNull;
       final isLoggingIn = state.matchedLocation == '/login';
 
-      if (user == null) {
+      if (user == null ||
+          !const [UserRole.waiter, UserRole.counter, UserRole.manager]
+              .contains(user.userRole)) {
         return isLoggingIn ? null : '/login';
       }
 

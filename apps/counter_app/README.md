@@ -19,7 +19,7 @@ flutter run -d chrome
 
 ## Tương thích và kiểm thử
 
-Giữ các collection và hàm cũ. Bổ sung trường tùy chọn `orders.paymentId`, `sessions.orderRevision`, và danh sách món đã chốt trong hóa đơn. Không cần sửa rules/indexes hoặc di chuyển dữ liệu cũ. Hai ứng dụng còn lại không bị sửa mã nguồn; cần cập nhật `core` để dùng các quy tắc cấu hình mới. Các lời gọi hiển thị/cảnh báo cũ vẫn dùng ngưỡng mặc định nếu không truyền cấu hình.
+Giữ các collection và hàm cũ. Bổ sung trường tùy chọn `orders.paymentId`, `sessions.orderRevision`, và danh sách món đã chốt trong hóa đơn. Không cần di chuyển dữ liệu cũ. Lịch sử hóa đơn customer cần index payments(customerId ASC, paidAt DESC), đã bổ sung và tạo trên Firebase trong lượt kiểm tra 29/10. Cập nhật core và dependency cho cả ba app; các lời gọi hiển thị/cảnh báo cũ vẫn dùng ngưỡng mặc định nếu không truyền cấu hình.
 
 ```powershell
 flutter analyze
@@ -48,6 +48,6 @@ flutter build apk --release
 
 - `pos_ux_test.dart`: bố cục 1366×768, 1024×600, 800×600; hóa đơn dài; thử lại tải biên lai; chống bấm lặp; database trống.
 - `cross_role_flow_test.dart`: dùng service thật trên Firestore giả lập, kiểm tra khách đặt món trước → quầy nhận QR → phục vụ duyệt/pha chế/giao món → yêu cầu tính tiền → thanh toán → điểm/thống kê/dọn bàn. Đây là kiểm thử hợp đồng service, không phải kiểm thử giao diện của ba ứng dụng thật hoặc Security Rules trên Firebase.
-- Hiện customer_app và waiter_app trên nhánh này mới có README. Sau khi hai app có code, cần chạy ba app trên ba laptop để kiểm tra đồng bộ trực tiếp, đăng nhập theo vai trò và camera thực tế.
+- Waiter đã có code và nền tảng web để chạy laptop; xem `../waiter_app/README.md` (cổng waiter 5202, counter 5201). Customer đã tích hợp từ main; xem `../customer_app/README.md`, có thể chạy cổng 5203. Cần thử nghiệm đồng bộ nhiều máy thực tế; chưa coi test service là nghiệm thu cả ba app.
 - Android đã bổ sung Gradle wrapper, Activity và resource còn thiếu. Gradle giới hạn 1536 MB heap và 2 worker để giảm tải. Lần build APK trước bị ngắt do máy crash; APK chưa được xác nhận tạo thành công. Chạy lại riêng lệnh build APK khi máy ổn định, tránh chạy cùng lúc nhiều build/test.
 

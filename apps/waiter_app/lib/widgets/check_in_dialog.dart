@@ -40,7 +40,6 @@ class _CheckInDialogState extends State<CheckInDialog> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(height: 8),
-
             if (tableReservations.isEmpty)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -64,27 +63,27 @@ class _CheckInDialogState extends State<CheckInDialog> {
               )
             else
               ...tableReservations.map((res) {
-                return RadioListTile<ReservationModel>(
+                return ListTile(
                   title: Text(res.customerName),
                   subtitle: Text(
                       'SĐT: ${res.phone} | Khách: ${res.partySize} người\nMón đặt trước: ${res.preOrderItems.length} món'),
-                  value: res,
-                  groupValue: _selectedReservation,
-                  onChanged: (val) {
+                  selected: _selectedReservation == res,
+                  leading: Icon(_selectedReservation == res
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked),
+                  onTap: () {
                     setState(() {
-                      _selectedReservation = val;
+                      _selectedReservation = res;
                     });
                   },
                 );
               }),
-
             const Divider(height: 24),
             const Text(
               'Hoặc chọn từ danh sách tất cả đặt chỗ hôm nay:',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 8),
-
             DropdownButtonFormField<ReservationModel>(
               decoration: const InputDecoration(
                 labelText: 'Danh sách đặt bàn hôm nay',

@@ -18,9 +18,9 @@ class WaiterTaskHubScreen extends ConsumerWidget {
     final readyOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.ready]));
     final openRequestsAsync = ref.watch(openRequestsProvider);
 
-    final pendingCount = pendingOrdersAsync.value?.length ?? 0;
-    final readyCount = readyOrdersAsync.value?.length ?? 0;
-    final requestsCount = openRequestsAsync.value?.length ?? 0;
+    final pendingCount = pendingOrdersAsync.valueOrNull?.length ?? 0;
+    final readyCount = readyOrdersAsync.valueOrNull?.length ?? 0;
+    final requestsCount = openRequestsAsync.valueOrNull?.length ?? 0;
 
     return DefaultTabController(
       length: 3,

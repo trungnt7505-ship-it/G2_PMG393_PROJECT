@@ -7,7 +7,7 @@ void main() {
   group('TableTileWidget Unit/Widget Tests', () {
     testWidgets('Hiển thị đúng tên bàn, khu vực và sức chứa ở trạng thái bàn trống (Free)',
         (WidgetTester tester) async {
-      final table = TableModel(
+      const table = TableModel(
         id: 'table_01',
         name: 'Bàn 01',
         zone: 'Tầng 1',
@@ -40,7 +40,7 @@ void main() {
 
     testWidgets('Bật nút "Yêu cầu nhả bàn" và đổi sang màu Đỏ khi phiên ở trạng thái Quá giờ (Overtime)',
         (WidgetTester tester) async {
-      final table = TableModel(
+      const table = TableModel(
         id: 'table_02',
         name: 'Bàn 02',
         zone: 'Tầng 2',

@@ -5,6 +5,7 @@ import 'package:core/core.dart';
 import '../viewmodels/waiter_auth_viewmodel.dart';
 import 'floor_map_screen.dart';
 import 'waiter_task_hub_screen.dart';
+import '../widgets/session_alert_banner.dart';
 
 /// Màn hình chính gộp của App Nhân viên Phục vụ [WaiterMainScreen].
 /// Bao gồm Thanh Navigation Bottom điều hướng giữa Sơ đồ Bàn & Trung tâm Tác vụ.
@@ -25,17 +26,19 @@ class _WaiterMainScreenState extends ConsumerState<WaiterMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authViewModelUser = ref.watch(waiterAuthViewModelProvider).value;
+    final authViewModelUser = ref.watch(waiterAuthViewModelProvider).valueOrNull;
     final currentUserAsync = ref.watch(currentUserProvider);
-    final currentUser = authViewModelUser ?? currentUserAsync.value;
+    final currentUser = authViewModelUser ?? currentUserAsync.valueOrNull;
 
-    final pendingOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.pending]));
-    final readyOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.ready]));
+    final pendingOrdersAsync =
+        ref.watch(ordersByStatusesProvider(const [OrderStatus.pending]));
+    final readyOrdersAsync =
+        ref.watch(ordersByStatusesProvider(const [OrderStatus.ready]));
     final openRequestsAsync = ref.watch(openRequestsProvider);
 
-    final totalBadgeCount = (pendingOrdersAsync.value?.length ?? 0) +
-        (readyOrdersAsync.value?.length ?? 0) +
-        (openRequestsAsync.value?.length ?? 0);
+    final totalBadgeCount = (pendingOrdersAsync.valueOrNull?.length ?? 0) +
+        (readyOrdersAsync.valueOrNull?.length ?? 0) +
+        (openRequestsAsync.valueOrNull?.length ?? 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -43,12 +46,15 @@ class _WaiterMainScreenState extends ConsumerState<WaiterMainScreen> {
           children: [
             const Icon(Icons.person_pin_rounded, color: AppColors.accent),
             const SizedBox(width: 8),
-            Text(
+            Expanded(
+                child: Text(
               currentUser != null
                   ? 'Phục vụ: ${currentUser.displayName}'
                   : 'Cafe Waiter App',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )),
           ],
         ),
         backgroundColor: AppColors.primaryDark,
@@ -59,17 +65,21 @@ class _WaiterMainScreenState extends ConsumerState<WaiterMainScreen> {
             tooltip: 'Đăng xuất',
             onPressed: () async {
               await ref.read(waiterAuthViewModelProvider.notifier).signOut();
-              if (mounted) {
+              if (context.mounted) {
                 context.go('/login');
               }
             },
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: Column(children: [
+        const SessionAlertBanner(),
+        Expanded(
+            child: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        )),
+      ]),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: AppColors.primary,

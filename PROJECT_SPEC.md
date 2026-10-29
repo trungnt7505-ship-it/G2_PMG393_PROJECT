@@ -1,6 +1,6 @@
 # PROJECT SPECIFICATION: CAFE TABLE & ORDER MANAGEMENT SYSTEM
 
-> **Đặc tả làm việc cập nhật ngày 19/10/2026, đối chiếu mã nguồn hiện tại.**
+> **Đặc tả làm việc cập nhật ngày 29/10/2026, đối chiếu mã nguồn hiện tại.**
 > Tài liệu phân biệt yêu cầu cần hoàn thành và chức năng đã triển khai tại Mục 8. Các thay đổi mới trong working tree chỉ có trên máy cho đến khi được commit/push.
 > **Nguyên tắc tối thượng cho AI:** Luôn đọc kỹ cấu trúc Monorepo, Schema Firestore, Chữ ký hàm (Method Signatures) trong `packages/core` và Quy tắc phân vùng code của 3 thành viên trước khi sinh bất kỳ dòng code nào.
 
@@ -258,6 +258,8 @@ Future<void> switchTable({required String sessionId, required String newTableId,
 
 Future<void> cancelMistakenSession(String sessionId)
 
+Chỉ hủy phiên active/billing chưa có subtotal hoặc đơn chưa hủy, bàn còn trỏ đúng phiên. Nếu liên kết reservation, hủy lịch và giải phóng đúng các slot còn thuộc lịch đó, kể cả sau chuyển bàn. Không cho hủy phiên paid hoặc giải phóng bàn đang thuộc phiên khác.
+
 Future<void> markTableCleaned(String tableId)
 
 Future<void> sendTableRequest({required String sessionId, required String tableId, required String tableName, required RequestType type, required String createdBy, String message = ''})
@@ -467,7 +469,8 @@ Mỗi thành viên phải có thư mục `test/` trong phạm vi của mình và
 - Core có models/services/providers cho đặt bàn, phiên bàn, món, yêu cầu, thanh toán, điểm và cấu hình động.
 - Counter có sơ đồ bàn theo zone, hàng đợi, xử lý món, đơn mang đi, tra thành viên, thanh toán và hóa đơn đã lưu. Màn hình rộng từ 1200px dùng ba cột; màn hình nhỏ dùng ba tab. Có tải/lỗi/thử lại và chặn thao tác lặp khi đang xử lý.
 - Manager có quản lý món, cấu hình, seed, thống kê trong ngày và mở lại hóa đơn. Route `/admin` chỉ cho manager; counter được chuyển về POS. Manager vẫn dùng được POS.
-- Customer/waiter trên nhánh hiện tại mới có README. Các màn hình Phần B/C là yêu cầu cần xây dựng, chưa phải chức năng đã nghiệm thu.
+- Waiter đã có sơ đồ bàn, thao tác phiên, gọi món hộ, duyệt/giao món và xử lý yêu cầu; bổ sung nền tảng web cho demo laptop, cảnh báo trong giao diện, đăng nhập Firebase thật và thử lại khi khởi tạo lỗi. Hướng dẫn: [README waiter_app](apps/waiter_app/README.md).
+- Customer từ main đã tích hợp vào nhánh làm việc: có cấu hình Firebase web, đăng nhập/đăng ký, đặt bàn và món trước, QR, phiên bàn/gọi thêm món, lịch sử điểm và hóa đơn. Chưa nghiệm thu luồng ba app trên nhiều máy thật.
 
 ### 8.2. Thống kê trong ngày
 
@@ -490,18 +493,22 @@ Mỗi thành viên phải có thư mục `test/` trong phạm vi của mình và
 
 ### 8.4. Giới hạn cần xử lý trước khi tuyên bố hoàn thành
 
-- AuthViewModel còn đăng nhập mẫu cục bộ khi Firebase đăng nhập lỗi. Đây là chức năng demo, không phải tài khoản Firebase thật hoặc phân quyền hoàn chỉnh.
+- Counter và waiter đều yêu cầu tài khoản Firebase thật; đã bỏ đăng nhập giả, tự tạo tài khoản/đổi role và anonymous dự phòng trong UI nhân viên.
+- Customer tự check-in QR tại bàn vẫn bị Rules hiện tại chặn ghi tables. Luồng demo đã xác nhận dùng counter quét QR lịch đặt tại quầy. Không coi tự check-in là đã nghiệm thu.
 - UI admin giới hạn manager nhưng rules cấu hình hiện vẫn cho manager/counter ghi. Cần thống nhất quyền và kiểm thử rules; route guard không thay thế kiểm soát backend.
-- CountdownTimerWidget dùng chung còn nội dung mặc định 15/30 phút. Customer/waiter cần đọc cấu hình và truyền vào tính trạng thái/cảnh báo; không giả định mọi UI đã tự cập nhật cấu hình động.
+- CountdownTimerWidget dùng chung đã bổ sung tham số warningMinutes/extendStepMinutes, mặc định 15/30 để giữ tương thích. Các app cần truyền cấu hình hiện tại khi hiển thị; không giả định mọi lời gọi cũ đã cập nhật ngưỡng động.
 - Chưa nghiệm thu ba app trên ba máy thật, quyền camera/thông báo/rung, từ chối quyền, lỗi mạng và Firebase Rules.
 - Android counter đã bổ sung scaffold/wrapper và cấu hình build nhưng APK release chưa xác nhận build thành công sau sự cố máy. Release signing hiện dùng debug key cho demo, chưa phải phát hành chính thức.
 
 ### 8.5. Kiểm thử đã ghi nhận
 
-- Core: lần kiểm tra gần nhất 32 test pass, gồm trạng thái, slot, điểm, checkout và cấu hình vận hành.
-- Counter: 24 test pass với `flutter test --concurrency=1`; `flutter analyze` pass; build web release thành công bằng `flutter build web --release --no-wasm-dry-run`.
+- Core: 39 test pass, gồm trạng thái, slot, điểm, checkout, cấu hình, transaction đặt bàn, gia hạn và hủy phiên.
+- Counter: 26 test pass với `flutter test --concurrency=1`; `flutter analyze` pass; build web release thành công.
 - Test mới gồm POS UX và nghiệp vụ liên vai trò dùng Firestore giả trong test. Đây chưa phải E2E ba UI thật hoặc kiểm thử rules đã triển khai.
-- Customer/waiter cần bổ sung test Mục 7 khi có code. Chạy lại kiểm tra liên quan sau khi sửa source. Xem [README counter_app](apps/counter_app/README.md).
+- Waiter: 9 test pass, analyze không có góp ý; gồm bố cục laptop, cảnh báo, đăng nhập lỗi, chặn khách vào route phục vụ và lỗi stream phiên bàn. Bản web dùng cùng Firebase project với counter; vẫn cần thử luồng thực tế trên nhiều máy.
+- Customer đã có countdown_timer_widget_test.dart và customer_viewmodels_test.dart. Chạy lại kiểm tra liên quan sau khi tích hợp core. Xem [README counter_app](apps/counter_app/README.md) và [README customer_app](apps/customer_app/README.md).
+- Ngày 29/10: customer 10 test, counter 26, waiter 9, core 39 — tổng 84 test pass. Đã thử UI ba phiên web với Firebase thật, check-in tại quầy, gọi/duyệt/pha chế/phục vụ, thanh toán, điểm, lịch sử, dọn bàn, gia hạn và chuyển bàn. Kết quả, fixture và giới hạn: [DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md).
+- Sau tích hợp main ngày 28/10: customer analyze đạt và 8 test pass; core 32, counter 24, waiter 9 test đều pass trên cùng core mới. Chưa thay thế kiểm thử ba ứng dụng thật. Counter cần cập nhật dependency Google Sign-In; bước tạo symlink Windows native yêu cầu Developer Mode trên máy hiện tại, còn test có thể chạy với `--no-pub` sau khi dependency đã được resolve.
 
 ### 8.6. Checklist tích hợp ba laptop
 

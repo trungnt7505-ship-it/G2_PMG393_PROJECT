@@ -30,7 +30,7 @@ Future<void> main() async {
   }
 
   // Khởi tạo dịch vụ chuông báo và rung Haptic cảnh báo sắp hết giờ
-  await AlarmService.instance.init();
+  if (!kIsWeb) await AlarmService.instance.init();
 
   runApp(const ProviderScope(child: CustomerApp()));
 }

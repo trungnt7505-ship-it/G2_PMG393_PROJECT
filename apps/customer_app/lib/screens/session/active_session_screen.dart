@@ -112,7 +112,9 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                             ],
                           ),
                           const Divider(height: 28),
-                          CountdownTimerWidget(
+                          if (!session.isActive)
+                            const Text('Phiên bàn đã kết thúc', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold))
+                          else CountdownTimerWidget(
                             expiresAt: session.expiresAt,
                             fontSize: 34,
                             warningMinutes: config.warnMinutes.isNotEmpty
@@ -429,7 +431,12 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
   Widget _buildSessionStatusTag(String status) {
     final isBilling = status == 'billing';
     final color = isBilling ? const Color(0xFFE65100) : const Color(0xFF2E7D32);
-    final label = isBilling ? 'Chờ thanh toán' : 'Đang hoạt động';
+    final label = switch (status) {
+      'billing' => 'Chờ thanh toán',
+      'paid' => 'Đã thanh toán',
+      'cancelled' => 'Đã hủy',
+      _ => 'Đang hoạt động',
+    };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

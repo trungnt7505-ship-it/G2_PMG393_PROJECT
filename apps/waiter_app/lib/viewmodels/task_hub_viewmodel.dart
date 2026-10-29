@@ -14,6 +14,7 @@ class TaskHubViewModel extends StateNotifier<AsyncValue<void>> {
 
   /// Duyệt đơn gọi món pending từ khách tự đặt.
   Future<bool> approveOrder(String sessionId, String orderId) async {
+    if (state.isLoading) return false;
     state = const AsyncValue.loading();
     try {
       await _orderService.approveOrder(sessionId, orderId);
@@ -31,6 +32,7 @@ class TaskHubViewModel extends StateNotifier<AsyncValue<void>> {
     String orderId, {
     required String reason,
   }) async {
+    if (state.isLoading) return false;
     state = const AsyncValue.loading();
     try {
       await _orderService.cancelOrder(sessionId, orderId, reason: reason);
@@ -44,6 +46,7 @@ class TaskHubViewModel extends StateNotifier<AsyncValue<void>> {
 
   /// Cập nhật trạng thái món đã chế biến xong thành đã mang ra bàn (`served`).
   Future<bool> markOrderServed(String sessionId, String orderId) async {
+    if (state.isLoading) return false;
     state = const AsyncValue.loading();
     try {
       await _orderService.updatePreparationStatus(
@@ -61,6 +64,7 @@ class TaskHubViewModel extends StateNotifier<AsyncValue<void>> {
 
   /// Đánh dấu đã giải quyết yêu cầu hỗ trợ từ bàn.
   Future<bool> resolveRequest(String requestId) async {
+    if (state.isLoading) return false;
     state = const AsyncValue.loading();
     try {
       await _sessionService.resolveRequest(requestId);

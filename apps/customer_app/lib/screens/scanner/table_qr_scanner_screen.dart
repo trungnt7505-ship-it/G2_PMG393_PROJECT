@@ -91,6 +91,9 @@ class _TableQrScannerScreenState extends ConsumerState<TableQrScannerScreen> {
 
   String _friendlyCheckInError(Object error) {
     final msg = error.toString();
+    if (msg.contains('permission-denied')) {
+      return 'Tài khoản khách hiện chưa có quyền tự mở bàn. Vui lòng đưa mã đặt trước cho thu ngân để nhận bàn tại quầy.';
+    }
     if (msg.contains('Bàn hiện đang có người sử dụng')) {
       return 'Bàn này hiện đang có người sử dụng. Vui lòng chọn bàn khác hoặc liên hệ nhân viên.';
     }

@@ -26,7 +26,7 @@ class _CounterAuthScreenState extends ConsumerState<CounterAuthScreen> {
 
   Future<void> _submitLogin() async {
     final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -42,11 +42,6 @@ class _CounterAuthScreenState extends ConsumerState<CounterAuthScreen> {
     if (success && mounted) {
       context.go('/pos');
     }
-  }
-
-  void _fillSampleAccount(String email, String password) {
-    _emailController.text = email;
-    _passwordController.text = password;
   }
 
   @override
@@ -172,29 +167,7 @@ class _CounterAuthScreenState extends ConsumerState<CounterAuthScreen> {
                 const SizedBox(height: 24),
                 const Divider(),
 
-                // Tài khoản mẫu hỗ trợ chấm bài
-                const Text(
-                  'Tài khoản mẫu dùng thử:',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _fillSampleAccount('counter@cafe.com', '123456'),
-                        child: const Text('Thu ngân (Counter)'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _fillSampleAccount('manager@cafe.com', '123456'),
-                        child: const Text('Quản lý (Manager)'),
-                      ),
-                    ),
-                  ],
-                ),
+                const Text('Đăng nhập bằng tài khoản Firebase đã được cấp vai trò thu ngân hoặc quản lý.'),
               ],
             ),
           ),

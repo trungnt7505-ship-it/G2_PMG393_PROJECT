@@ -361,11 +361,13 @@ class SessionService {
           .where('resStart',
               isGreaterThanOrEqualTo: Timestamp.fromDate(session.expiresAt))
           .orderBy('resStart')
-          .limit(1)
           .get();
 
-      if (nextSlots.docs.isNotEmpty) {
-        final nextSlot = nextSlots.docs.first.data();
+      // Slot còn lại của chính lịch đã check-in không phải lượt khách tiếp theo.
+      final otherSlots = nextSlots.docs.where((doc) =>
+          doc.data()['reservationId'] != session.reservationId);
+      if (otherSlots.isNotEmpty) {
+        final nextSlot = otherSlots.first.data();
         final nextStart = (nextSlot['resStart'] as Timestamp).toDate();
         final maxExtendMinutes =
             nextStart.difference(session.expiresAt).inMinutes -
@@ -514,6 +516,35 @@ class SessionService {
           SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
       final tableRef = _firestore.collection('tables').doc(session.tableId);
 
+      if (!session.isActive || session.subtotal != 0) {
+        throw StateError('Chỉ được hủy phiên đang mở và chưa phát sinh hóa đơn.');
+      }
+      final tableSnapshot = await transaction.get(tableRef);
+      if (tableSnapshot.data()?['currentSessionId'] != sessionId) {
+        throw StateError('Bàn không còn thuộc phiên cần hủy. Vui lòng tải lại.');
+      }
+      final orders = await sessionRef.collection('orders').get();
+      if (orders.docs.any((doc) => doc.data()['status'] != OrderStatus.cancelled.name)) {
+        throw StateError('Phiên đã có đơn món. Hãy xử lý đơn trước khi hủy mở nhầm.');
+      }
+      ReservationModel? linkedReservation;
+      final slotsToRelease = <DocumentReference<Map<String, dynamic>>>[];
+      if (session.reservationId != null) {
+        final resSnapshot = await transaction.get(
+            _firestore.collection('reservations').doc(session.reservationId));
+        if (resSnapshot.exists && resSnapshot.data()?['sessionId'] == sessionId) {
+          linkedReservation = ReservationModel.fromMap(resSnapshot.data()!, resSnapshot.id);
+          for (final key in TableSlotModel.generateSlotKeys(linkedReservation.startTime)) {
+            final slotRef = _firestore.collection('tables')
+                .doc(linkedReservation.tableId).collection('slots').doc(key);
+            final slotSnapshot = await transaction.get(slotRef);
+            if (slotSnapshot.data()?['reservationId'] == linkedReservation.id) {
+              slotsToRelease.add(slotRef);
+            }
+          }
+        }
+      }
+
       transaction.update(sessionRef, {
         'status': SessionStatus.cancelled.name,
       });
@@ -522,6 +553,13 @@ class SessionService {
         'status': TablePhysicalStatus.available.name,
         'currentSessionId': null,
       });
+      if (linkedReservation != null) {
+        transaction.update(_firestore.collection('reservations').doc(linkedReservation.id),
+            {'status': ReservationStatus.cancelled.name});
+        for (final ref in slotsToRelease) {
+          transaction.delete(ref);
+        }
+      }
     });
   }
 

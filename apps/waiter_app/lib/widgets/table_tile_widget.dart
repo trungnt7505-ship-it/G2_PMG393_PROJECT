@@ -61,7 +61,7 @@ class TableTileWidget extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: statusColor.withOpacity(0.08),
+            color: statusColor.withValues(alpha: 0.08),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -107,12 +107,14 @@ class TableTileWidget extends StatelessWidget {
                   const Icon(Icons.location_on_outlined,
                       size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 2),
-                  Text(
+                  Expanded(
+                      child: Text(
                     table.zone,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 11, color: AppColors.textSecondary),
-                  ),
-                  const Spacer(),
+                  )),
                   const Icon(Icons.people_outline,
                       size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 2),
@@ -194,7 +196,8 @@ class TableTileWidget extends StatelessWidget {
                     icon: const Icon(Icons.notifications_active, size: 14),
                     label: const Text(
                       'Yêu cầu nhả bàn',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.statusOvertime,
