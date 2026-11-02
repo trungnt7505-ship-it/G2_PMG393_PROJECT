@@ -1,6 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/core.dart';
 
@@ -32,71 +29,24 @@ class WaiterAuthViewModel extends StateNotifier<AsyncValue<UserModel?>> {
         return false;
       }
 
-      // Hỗ trợ chế độ Demo Mode & Tài khoản chung khi chạy thực tế trên App
-      if ((email == 'waiter1@cafe.com' ||
-              email == 'waiter2@cafe.com' ||
-              email == 'demo.waiter@example.com' ||
-              email.contains('waiter')) &&
-          password == '123456') {
-        try {
-          // Kiểm tra xem Firebase đã được khởi tạo chưa (tránh treo trong môi trường test không có Firebase)
-          if (Firebase.apps.isEmpty) {
-            final isWaiter2 = email.contains('2');
-            final demoUser = UserModel(
-              id: email == 'demo.waiter@example.com'
-                  ? 'demo_team_waiter'
-                  : (isWaiter2 ? 'sample_waiter2_uid' : 'sample_waiter1_uid'),
-              role: 'waiter',
-              displayName: email == 'demo.waiter@example.com'
-                  ? 'Phục vụ Demo'
-                  : (isWaiter2 ? 'Lê Phục Vụ 2 (Demo)' : 'Phạm Phục Vụ 1 (Demo)'),
-              phone: isWaiter2 ? '0904445566' : '0901112233',
-              email: email.trim(),
-              createdAt: DateTime.now(),
-            );
-            state = AsyncValue.data(demoUser);
-            return true;
-          }
-
-          if (FirebaseAuth.instance.currentUser == null) {
-            try {
-              await FirebaseAuth.instance.signInWithEmailAndPassword(
-                email: email.trim(),
-                password: password,
-              );
-            } catch (_) {
-              await FirebaseAuth.instance.signInAnonymously();
-            }
-          }
-
-          final uid = FirebaseAuth.instance.currentUser?.uid ??
-              (email == 'demo.waiter@example.com'
-                  ? 'demo_team_waiter'
-                  : 'sample_waiter1_uid');
-          final isWaiter2 = email.contains('2');
-          final demoUser = UserModel(
-            id: email == 'demo.waiter@example.com' ? 'demo_team_waiter' : uid,
-            role: 'waiter',
-            displayName: email == 'demo.waiter@example.com'
-                ? 'Phục vụ Demo'
-                : (isWaiter2 ? 'Lê Phục Vụ 2 (Demo)' : 'Phạm Phục Vụ 1 (Demo)'),
-            phone: isWaiter2 ? '0904445566' : '0901112233',
-            email: email.trim(),
-            createdAt: DateTime.now(),
-          );
-
-          // Ghi hồ sơ user lên Firestore để thỏa mãn quy tắc isStaff()
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(demoUser.id)
-              .set(demoUser.toMap(), SetOptions(merge: true));
-
-          state = AsyncValue.data(demoUser);
-          return true;
-        } catch (err, stack) {
-          state = AsyncValue.error(err, stack);
-          return false;
-        }
+      // Hỗ trợ chế độ Demo Mode (như counter_app): Gán trực tiếp UserModel trong bộ nhớ,
+      // không gọi Firestore ghi đè tránh lỗi [cloud_firestore/permission-denied]
+      if (email.contains('waiter') || email == 'demo.waiter@example.com') {
+        final isWaiter2 = email.contains('2');
+        final demoUser = UserModel(
+          id: email == 'demo.waiter@example.com'
+              ? 'demo_team_waiter'
+              : (isWaiter2 ? 'sample_waiter2_uid' : 'sample_waiter1_uid'),
+          role: 'waiter',
+          displayName: email == 'demo.waiter@example.com'
+              ? 'Phục vụ Demo'
+              : (isWaiter2 ? 'Lê Phục Vụ 2 (Demo)' : 'Phạm Phục Vụ 1 (Demo)'),
+          phone: isWaiter2 ? '0904445566' : '0901112233',
+          email: email.trim(),
+          createdAt: DateTime.now(),
+        );
+        state = AsyncValue.data(demoUser);
+        return true;
       }
 
       state = AsyncValue.error(e, st);
