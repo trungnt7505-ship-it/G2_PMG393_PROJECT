@@ -40,16 +40,34 @@ class FloorMapScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: activeSessionsAsync.hasError || confirmedReservationsAsync.hasError
           ? Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text(
-                  'Không tải được phiên bàn/lịch đặt. Kiểm tra kết nối và quyền truy cập.'),
-              ElevatedButton(
-                  onPressed: () {
-                    ref.invalidate(activeSessionsProvider);
-                    ref.invalidate(todayConfirmedReservationsProvider);
-                  },
-                  child: const Text('Thử lại')),
-            ]))
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 48, color: Colors.orange),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Không tải được phiên bàn/lịch đặt. Kiểm tra kết nối và quyền truy cập.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        ref.invalidate(activeSessionsProvider);
+                        ref.invalidate(todayConfirmedReservationsProvider);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : activeSessionsAsync.isLoading ||
                   confirmedReservationsAsync.isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -80,7 +98,7 @@ class FloorMapScreen extends ConsumerWidget {
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
                             ),
-                            child: const Text('Tải lại'),
+                            child: const Text('Thử lại'),
                           ),
                         ],
                       ),
@@ -163,9 +181,9 @@ class FloorMapScreen extends ConsumerWidget {
                           child: GridView.builder(
                             padding: const EdgeInsets.all(12),
                             gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 340,
-                              mainAxisExtent: 240,
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 1.15,
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
                             ),
@@ -241,14 +259,16 @@ class FloorMapScreen extends ConsumerWidget {
                                     table: table,
                                     activeSession:
                                         hasSession ? activeSession : null,
-                                    nextReservation: hasRes ? nextRes : null,
+                                    nextReservation:
+                                        hasRes ? nextRes : null,
                                     displayStatus: displayStatus,
                                     now: floorState.now,
                                     config: config,
                                     allTables: allTables,
                                     confirmedReservations:
                                         confirmedReservations,
-                                    waiterUid: currentUser?.id ?? 'waiter_demo',
+                                    waiterUid: currentUser?.id ??
+                                        'waiter_demo',
                                   );
                                 },
                                 onRequestRelease: () {
@@ -257,10 +277,11 @@ class FloorMapScreen extends ConsumerWidget {
                                       sessionId: activeSession.id,
                                       tableId: table.id,
                                       tableName: table.name,
-                                      createdBy:
-                                          currentUser?.id ?? 'waiter_demo',
+                                      createdBy: currentUser?.id ??
+                                          'waiter_demo',
                                     );
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
                                       const SnackBar(
                                         content: Text(
                                             'Đã gửi yêu cầu nhả bàn đến khách hàng!'),
@@ -340,9 +361,7 @@ class FloorMapScreen extends ConsumerWidget {
                     );
                     if (sessionId != null && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                'Đã check-in thành công cho ${res.customerName}')),
+                        SnackBar(content: Text('Đã check-in thành công cho ${res.customerName}')),
                       );
                     }
                   },
@@ -359,12 +378,10 @@ class FloorMapScreen extends ConsumerWidget {
           },
           onExtendSession: () async {
             if (activeSession != null) {
-              final ok = await floorViewModel.extendSession(
-                  activeSession.id, waiterUid);
+              final ok = await floorViewModel.extendSession(activeSession.id, waiterUid);
               if (ok && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Gia hạn bàn thành công +30 phút!')),
+                  const SnackBar(content: Text('Gia hạn bàn thành công +30 phút!')),
                 );
               }
             }
@@ -387,9 +404,7 @@ class FloorMapScreen extends ConsumerWidget {
                       );
                       if (ok && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content: Text(
-                                  'Đã chuyển phiên từ ${table.name} sang ${targetTable.name}')),
+                          SnackBar(content: Text('Đã chuyển phiên từ ${table.name} sang ${targetTable.name}')),
                         );
                       }
                     },
@@ -418,12 +433,10 @@ class FloorMapScreen extends ConsumerWidget {
           },
           onCancelSession: () async {
             if (activeSession != null) {
-              final ok =
-                  await floorViewModel.cancelMistakenSession(activeSession.id);
+              final ok = await floorViewModel.cancelMistakenSession(activeSession.id);
               if (ok && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Đã hủy phiên mở nhầm thành công.')),
+                  const SnackBar(content: Text('Đã hủy phiên mở nhầm thành công.')),
                 );
               }
             }
