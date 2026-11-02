@@ -31,17 +31,28 @@ class WaiterAuthViewModel extends StateNotifier<AsyncValue<UserModel?>> {
         return false;
       }
 
-      // Hỗ trợ chế độ Demo Mode: Đăng nhập ẩn danh FirebaseAuth và ghi hồ sơ user lên Firestore
-      // để vượt qua lớp bảo mật Firebase Security Rules (isStaff -> getUserData().role == 'waiter')
+      // Hỗ trợ chế độ Demo Mode: Xác thực với Firebase Auth (để có request.auth != null)
+      // và tự động tạo hồ sơ user với role = 'waiter' trên Firestore để vượt qua quy tắc isStaff()
       if (email.contains('waiter') || email == 'demo.waiter@example.com') {
         try {
-          if (FirebaseAuth.instance.currentUser == null) {
+          UserCredential credential;
+          try {
+            credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: email.trim(),
+              password: password,
+            );
+          } catch (_) {
             try {
-              await FirebaseAuth.instance.signInAnonymously();
-            } catch (_) {}
+              credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                email: email.trim(),
+                password: password,
+              );
+            } catch (_) {
+              credential = await FirebaseAuth.instance.signInAnonymously();
+            }
           }
 
-          final uid = FirebaseAuth.instance.currentUser?.uid ?? 'sample_waiter_uid';
+          final uid = credential.user!.uid;
           final isWaiter2 = email.contains('2');
           final demoUser = UserModel(
             id: uid,
@@ -54,7 +65,8 @@ class WaiterAuthViewModel extends StateNotifier<AsyncValue<UserModel?>> {
             createdAt: DateTime.now(),
           );
 
-          // Ghi hồ sơ user lên Firestore để `firestore.rules` (isStaff) cấp quyền đọc dữ liệu
+          // QUAN TRỌNG: Ghi tài liệu `users/$uid` lên Firestore với `role: 'waiter'`
+          // để hàm isStaff() trong firestore.rules phê duyệt quyền đọc/ghi dữ liệu
           await FirebaseFirestore.instance
               .collection('users')
               .doc(uid)
@@ -62,21 +74,9 @@ class WaiterAuthViewModel extends StateNotifier<AsyncValue<UserModel?>> {
 
           state = AsyncValue.data(demoUser);
           return true;
-        } catch (_) {
-          // Fallback gán tạm trong memory nếu kết nối Firestore gặp sự cố
-          final isWaiter2 = email.contains('2');
-          final demoUser = UserModel(
-            id: isWaiter2 ? 'sample_waiter2_uid' : 'sample_waiter1_uid',
-            role: 'waiter',
-            displayName: email == 'demo.waiter@example.com'
-                ? 'Phục vụ Demo'
-                : (isWaiter2 ? 'Lê Phục Vụ 2 (Demo)' : 'Phạm Phục Vụ 1 (Demo)'),
-            phone: isWaiter2 ? '0904445566' : '0901112233',
-            email: email.trim(),
-            createdAt: DateTime.now(),
-          );
-          state = AsyncValue.data(demoUser);
-          return true;
+        } catch (err, stack) {
+          state = AsyncValue.error(err, stack);
+          return false;
         }
       }
 
