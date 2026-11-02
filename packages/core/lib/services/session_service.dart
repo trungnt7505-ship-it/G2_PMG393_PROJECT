@@ -102,6 +102,7 @@ class SessionService {
     required String openedBy,
     required String openedByRole,
     String? reservationId,
+    String? tableQrSecret,
   }) async {
     final now = ClockService.instance.serverNow;
 
@@ -256,7 +257,7 @@ class SessionService {
         subtotal: initialSubtotal,
       );
 
-      transaction.set(sessionRef, session.toMap());
+      transaction.set(sessionRef, {...session.toMap(), if (tableQrSecret != null) 'tableQrSecret': tableQrSecret});
 
       // Cập nhật trạng thái bàn
       transaction.update(tableRef, {
@@ -298,6 +299,17 @@ class SessionService {
       throw Exception('Mã xác thực bàn không chính xác hoặc đã bị đổi.');
     }
 
+    // Customers may only claim their own confirmed reservation for this table.
+    final bookings = await _firestore.collection('reservations').where('customerId', isEqualTo: customerId).get();
+    final matches = bookings.docs.map((d) => ReservationModel.fromMap(d.data(), d.id))
+        .where((r) => r.tableId == tableId && r.status == 'confirmed' &&
+          (reservationId == null || r.id == reservationId)).toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final now = ClockService.instance.serverNow;
+    final config = await ConfigService(firestore: _firestore).read();
+    final eligible = matches.where((r) => !now.isBefore(r.startTime.subtract(Duration(minutes: config.checkInEarlyMinutes))) && !now.isAfter(r.holdUntil)).toList();
+    if (eligible.isEmpty) throw StateError('Không có đặt bàn của bạn trong giờ nhận bàn. Vui lòng liên hệ nhân viên.');
+    final selectedReservation = eligible.first;
     // Lấy tên khách hàng
     final userDoc = await _firestore.collection('users').doc(customerId).get();
     final customerName =
@@ -309,7 +321,8 @@ class SessionService {
       customerName: customerName,
       openedBy: customerId,
       openedByRole: 'customer',
-      reservationId: reservationId,
+      reservationId: selectedReservation.id,
+      tableQrSecret: secretKey,
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/core.dart';
@@ -27,13 +28,23 @@ class ActiveSessionScreen extends ConsumerStatefulWidget {
 class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
   final _formatter = NumberFormat('#,###', 'vi_VN');
   bool _alarmReady = false;
+  Timer? _alarmTicker;
 
   @override
   void initState() {
     super.initState();
+    _alarmTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     ref.read(alarmServiceProvider).init().then((_) {
       if (mounted) setState(() => _alarmReady = true);
     }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _alarmTicker?.cancel();
+    super.dispose();
   }
 
   @override
@@ -41,6 +52,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
     final sessionAsync = ref.watch(sessionStreamProvider(widget.sessionId));
     final ordersAsync = ref.watch(sessionOrdersProvider(widget.sessionId));
     final menuAsync = ref.watch(menuItemsProvider);
+    final requests = ref.watch(openRequestsProvider);
     final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final uid = ref.watch(authServiceProvider).currentUid ?? '';
     final sessionState = ref.watch(activeSessionViewModelProvider);
@@ -73,6 +85,10 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
               ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 children: [
+                  ...?requests.valueOrNull?.where((r) => r.sessionId == session.id && r.type == 'release_table').map(
+                    (r) => _buildMessageBanner('Nhân viên yêu cầu nhả bàn: ${r.message}', isError: true)),
+                  if (session.isActive && !session.expiresAt.isAfter(ClockService.instance.serverNow))
+                    _buildMessageBanner('Đã hết thời gian sử dụng bàn. Vui lòng gia hạn hoặc yêu cầu tính tiền.', isError: true),
                   // Thông báo lỗi / thành công từ ViewModel
                   if (sessionState.actionError != null)
                     _buildMessageBanner(sessionState.actionError!, isError: true),

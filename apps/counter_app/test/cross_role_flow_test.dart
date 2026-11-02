@@ -143,7 +143,7 @@ void main() {
         'paid');
     expect((await db.doc('tables/table').get()).data()!['status'],
         'needs_cleaning');
-    expect((await db.collection('tables/table/slots').get()).docs, isEmpty);
+    expect((await db.collection('tables/table/slots').get()).docs.where((d) => d.id != '__booking_guard'), isEmpty);
     await sessions.markTableCleaned('table');
     expect((await db.doc('tables/table').get()).data()!['status'], 'available');
     await expectLater(

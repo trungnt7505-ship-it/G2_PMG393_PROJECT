@@ -13,6 +13,61 @@ class ReservationService {
   ReservationService({FirebaseFirestore? firestore})
       : _customFirestore = firestore;
 
+  bool _overlaps(DateTime a, DateTime b, DateTime c, DateTime d) =>
+      a.isBefore(d) && c.isBefore(b);
+
+  Future<bool> _tableConflict(
+      String tableId, DateTime start, DateTime end) async {
+    final slots = await _firestore
+        .collection('tables')
+        .doc(tableId)
+        .collection('slots')
+        .get();
+    for (final doc in slots.docs) {
+      if (doc.id == '__booking_guard') continue;
+      final data = doc.data();
+      final from = data['bookingStart'] ?? data['resStart'];
+      final until = data['bookingEnd'];
+      if (from is! Timestamp) continue;
+      final a = from.toDate();
+      final b = until is Timestamp
+          ? until.toDate()
+          : a.add(const Duration(minutes: 30));
+      if (_overlaps(start, end, a, b)) return true;
+    }
+    return _sessionConflict('tableId', tableId, start, end);
+  }
+
+  Future<bool> _sessionConflict(
+      String field, String id, DateTime start, DateTime end) async {
+    final sessions = await _firestore
+        .collection('sessions')
+        .where(field, isEqualTo: id)
+        .get();
+    return sessions.docs.any((doc) {
+      final d = doc.data();
+      return ['active', 'billing'].contains(d['status']) &&
+          d['startedAt'] is Timestamp &&
+          d['expiresAt'] is Timestamp &&
+          _overlaps(start, end, (d['startedAt'] as Timestamp).toDate(),
+              (d['expiresAt'] as Timestamp).toDate());
+    });
+  }
+
+  Future<bool> _customerConflict(
+      String uid, DateTime start, DateTime end) async {
+    final bookings = await _firestore
+        .collection('reservations')
+        .where('customerId', isEqualTo: uid)
+        .get();
+    for (final doc in bookings.docs) {
+      final r = ReservationModel.fromMap(doc.data(), doc.id);
+      if (['confirmed', 'checked_in'].contains(r.status) &&
+          _overlaps(start, end, r.startTime, r.endTime)) return true;
+    }
+    return _sessionConflict('customerId', uid, start, end);
+  }
+
   /// Lấy danh sách các bàn còn trống thỏa mãn số lượng khách [partySize]
   /// tại thời điểm bắt đầu [startTime] (kiểm tra không bị trùng bất kỳ ô nào
   /// trong 5 slot liên tiếp cách nhau 30 phút).
@@ -32,25 +87,14 @@ class ReservationService {
 
     if (allTables.isEmpty) return [];
 
-    final slotKeys = TableSlotModel.generateSlotKeys(startTime);
+    final config = await ConfigService(firestore: _firestore).read();
+    final end = startTime
+        .add(Duration(minutes: config.sessionMinutes + config.bufferMinutes));
     final availableTables = <TableModel>[];
 
     // 2. Kiểm tra xung đột slot cho từng bàn
     for (final table in allTables) {
-      bool isConflict = false;
-      for (final key in slotKeys) {
-        final slotDoc = await _firestore
-            .collection('tables')
-            .doc(table.id)
-            .collection('slots')
-            .doc(key)
-            .get();
-
-        if (slotDoc.exists) {
-          isConflict = true;
-          break;
-        }
-      }
+      final isConflict = await _tableConflict(table.id, startTime, end);
 
       if (!isConflict) {
         availableTables.add(table);
@@ -66,67 +110,113 @@ class ReservationService {
     // Report invalid times before entering the web transaction bridge.
     final bookingConfig = await ConfigService(firestore: _firestore).read();
     final bookingNow = ClockService.instance.serverNow;
-    if (draft.startTime.isBefore(bookingNow.add(Duration(minutes: bookingConfig.minAdvanceMinutes)))) {
-      throw StateError('Vui lòng đặt trước ít nhất ${bookingConfig.minAdvanceMinutes} phút tính từ lúc xác nhận.');
+    if (draft.startTime.isBefore(
+        bookingNow.add(Duration(minutes: bookingConfig.minAdvanceMinutes)))) {
+      throw StateError(
+          'Vui lòng đặt trước ít nhất ${bookingConfig.minAdvanceMinutes} phút tính từ lúc xác nhận.');
     }
-    if (draft.startTime.isAfter(bookingNow.add(Duration(days: bookingConfig.maxAdvanceDays)))) {
-      throw StateError('Chỉ được đặt bàn trước tối đa ${bookingConfig.maxAdvanceDays} ngày.');
+    if (draft.startTime.isAfter(
+        bookingNow.add(Duration(days: bookingConfig.maxAdvanceDays)))) {
+      throw StateError(
+          'Chỉ được đặt bàn trước tối đa ${bookingConfig.maxAdvanceDays} ngày.');
     }
     final slotTimes = TableSlotModel.slotTimes(draft.startTime);
     final slotKeys = TableSlotModel.generateSlotKeys(draft.startTime);
 
-    return await _firestore.runTransaction<String>((transaction) async {
-      final config = await ConfigService(firestore: _firestore)
-          .read(transaction: transaction);
-      final now = ClockService.instance.serverNow;
-      if (draft.startTime
-              .isBefore(now.add(Duration(minutes: config.minAdvanceMinutes))) ||
-          draft.startTime
-              .isAfter(now.add(Duration(days: config.maxAdvanceDays)))) {
-        throw StateError('Thời gian đặt bàn nằm ngoài giới hạn cấu hình.');
-      }
-      final slotRefs = slotKeys.map((key) {
-        return _firestore
+    Object? businessError;
+    try {
+      return await _firestore.runTransaction<String>((transaction) async {
+        businessError = null;
+        final guard = _firestore
             .collection('tables')
             .doc(draft.tableId)
             .collection('slots')
-            .doc(key);
-      }).toList();
-
-      // Kiểm tra xem có bất kỳ slot nào đã bị chiếm dụng chưa
-      for (final ref in slotRefs) {
-        final snapshot = await transaction.get(ref);
-        if (snapshot.exists) {
-          throw Exception(
-            'Bàn "${draft.tableName}" đã có người đặt trong khung giờ này. '
-            'Vui lòng chọn thời gian khác hoặc bàn khác.',
-          );
+            .doc('__booking_guard');
+        final customerGuard =
+            _firestore.collection('users').doc(draft.customerId);
+        // Concurrent bookings change these versions and force a fresh retry,
+        // including the interval queries below, before either can commit.
+        await transaction.get(guard);
+        final customerSnapshot = await transaction.get(customerGuard);
+        final config = await ConfigService(firestore: _firestore)
+            .read(transaction: transaction);
+        final now = ClockService.instance.serverNow;
+        if (draft.startTime.isBefore(
+                now.add(Duration(minutes: config.minAdvanceMinutes))) ||
+            draft.startTime
+                .isAfter(now.add(Duration(days: config.maxAdvanceDays)))) {
+          throw StateError('Thời gian đặt bàn nằm ngoài giới hạn cấu hình.');
         }
-      }
+        final end =
+            draft.startTime.add(Duration(minutes: config.sessionMinutes));
+        if (await _customerConflict(draft.customerId, draft.startTime, end)) {
+          businessError = StateError(
+              'Bạn đã có đặt bàn hoặc phiên sử dụng trùng thời gian. Vui lòng chọn giờ khác.');
+          throw businessError!;
+        }
+        if (await _tableConflict(draft.tableId, draft.startTime,
+            end.add(Duration(minutes: config.bufferMinutes)))) {
+          businessError = StateError(
+              'Bàn đã có lịch trùng thời gian. Vui lòng kiểm tra lại bàn trống.');
+          throw businessError!;
+        }
+        final slotRefs = slotKeys.map((key) {
+          return _firestore
+              .collection('tables')
+              .doc(draft.tableId)
+              .collection('slots')
+              .doc(key);
+        }).toList();
 
-      final resDocRef = _firestore.collection('reservations').doc();
-      final resId = resDocRef.id;
+        // Kiểm tra xem có bất kỳ slot nào đã bị chiếm dụng chưa
+        for (final ref in slotRefs) {
+          final snapshot = await transaction.get(ref);
+          if (snapshot.exists) {
+            throw Exception(
+              'Bàn "${draft.tableName}" đã có người đặt trong khung giờ này. '
+              'Vui lòng chọn thời gian khác hoặc bàn khác.',
+            );
+          }
+        }
 
-      // Khóa 5 ô slots trong transaction
-      for (var i = 0; i < slotRefs.length; i++) {
-        transaction.set(slotRefs[i], {
-          'reservationId': resId,
-          'resStart': Timestamp.fromDate(slotTimes[i]),
-        });
-      }
+        final resDocRef = _firestore.collection('reservations').doc();
+        final resId = resDocRef.id;
 
-      // Lưu tài liệu đặt bàn
-      final reservation = draft.copyWith(
-        id: resId,
-        createdAt: now,
-        endTime: draft.startTime.add(Duration(minutes: config.sessionMinutes)),
-        holdUntil: draft.startTime
-            .add(Duration(minutes: config.reservationHoldMinutes)),
-      );
-      transaction.set(resDocRef, reservation.toMap());
+        transaction.set(guard, {'revision': FieldValue.increment(1)},
+            SetOptions(merge: true));
+        if (customerSnapshot.exists) {
+          transaction.update(customerGuard, {'bookingRevision': FieldValue.increment(1)});
+        } else {
+          transaction.set(customerGuard, {'bookingRevision': 1});
+        }
+        // Khóa 5 ô slots trong transaction
+        for (var i = 0; i < slotRefs.length; i++) {
+          transaction.set(slotRefs[i], {
+            'reservationId': resId,
+            'resStart': Timestamp.fromDate(slotTimes[i]),
+            'bookingStart': Timestamp.fromDate(draft.startTime),
+            'bookingEnd': Timestamp.fromDate(
+                end.add(Duration(minutes: config.bufferMinutes))),
+          });
+        }
 
-      return resId;
-    });
+        // Lưu tài liệu đặt bàn
+        final reservation = draft.copyWith(
+          id: resId,
+          createdAt: now,
+          endTime:
+              draft.startTime.add(Duration(minutes: config.sessionMinutes)),
+          holdUntil: draft.startTime
+              .add(Duration(minutes: config.reservationHoldMinutes)),
+        );
+        transaction.set(resDocRef, reservation.toMap());
+
+        return resId;
+      });
+    } catch (_) {
+      if (businessError != null) throw businessError!;
+      rethrow;
+    }
   }
 
   /// Hủy đơn đặt bàn và giải phóng 5 slot đã khóa.

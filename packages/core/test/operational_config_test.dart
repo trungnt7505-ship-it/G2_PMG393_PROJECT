@@ -66,7 +66,10 @@ void main() {
             draft.copyWith(startTime: start.add(const Duration(days: 8)))),
         throwsStateError);
     expect(
-        (await db.collection('tables/table/slots').get()).docs, hasLength(5));
+        (await db.collection('tables/table/slots').get())
+            .docs
+            .where((d) => d.id != '__booking_guard'),
+        hasLength(5));
   });
 
   test('Early release follows config and cannot reopen a closed session',

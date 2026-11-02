@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/core.dart';
@@ -24,6 +25,7 @@ class _TableQrScannerScreenState extends ConsumerState<TableQrScannerScreen> {
   final _qrController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  String? _lastScanned;
 
   @override
   void dispose() {
@@ -120,9 +122,27 @@ class _TableQrScannerScreenState extends ConsumerState<TableQrScannerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Khung mô phỏng quét QR Scanner
-            Container(
+            SizedBox(
               height: 220,
+              child: MobileScanner(
+                onDetect: (capture) {
+                  if (_isLoading) return;
+                  for (final barcode in capture.barcodes) {
+                    final value = barcode.rawValue;
+                    if (value != null && value != _lastScanned && value.startsWith('cafe://table/')) {
+                      _lastScanned = value;
+                      _qrController.text = value;
+                      _submitCheckIn(value);
+                      break;
+                    }
+                  }
+                },
+                errorBuilder: (_, __, ___) => const Center(child: Text('Không mở được camera. Hãy cấp quyền camera hoặc dán nội dung QR bên dưới.')),
+              ),
+            ),
+            // Hướng dẫn nhập mã dự phòng.
+            Container(
+              height: 120,
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(20),

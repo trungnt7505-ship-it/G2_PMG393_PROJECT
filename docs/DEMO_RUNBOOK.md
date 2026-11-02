@@ -89,3 +89,15 @@ Lịch nhận bàn tại quầy dùng fixture `demo_flow_preorder_20261029` có 
 ## Kiểm thử tự động
 
 Core: 39 test; customer: 10; counter: 26; waiter: 9 — tổng **84 test pass** trong lượt kiểm tra. Analyze core và ba app đạt; các bản web release đã build và mở được. Bộ test là kiểm tra bổ sung, không thay thế các giới hạn thực tế ở trên.
+
+## Cập nhật luồng yêu cầu — 02/11/2026
+
+- Customer: camera QR thật (mobile_scanner), có nhập mã dự phòng. Chỉ nhận đặt bàn của chính mình đang trong cửa sổ check-in; khách vãng lai nhờ Waiter mở bàn.
+- Firestore Rules kiểm tra bàn trống, khách sở hữu đặt bàn, đúng QR, giờ nhận, và cập nhật đồng thời reservation/session/table. Rules đã triển khai lên cafe-73637; script `scripts/test-checkin-rules.cjs` kiểm tra 5 trường hợp trên emulator cổng 8188, project demo-cafe.
+- Món đặt trước của khách tự check-in được tạo ở trạng thái pending để nhân viên duyệt. Nhân viên check-in hộ vẫn theo luồng confirmed hiện có.
+- Customer nhìn thấy yêu cầu nhả bàn của Waiter trong màn hình phiên; có thể yêu cầu tính tiền/gọi phục vụ. Khi hết giờ có cảnh báo trên màn hình, không tự đuổi khách hoặc tự thu tiền.
+- Cảnh báo phiên được kiểm tra mỗi giây khi màn hình phiên mở. Android xin quyền notification; rung phụ thuộc thiết bị và quyền. Chưa cam kết thông báo khi ứng dụng bị đóng/hệ điều hành dừng ứng dụng.
+- Menu trang chủ thêm món vào giỏ của phiên đang hoạt động; khách kiểm tra giỏ và gửi đơn để nhân viên duyệt.
+- Chống đặt trùng dùng kiểm tra khoảng thời gian và guard phiên bản theo bàn/tài khoản. Các máy phải cùng dùng bản core mới. Dữ liệu trùng cũ không tự hủy. Slot cũ không có bookingStart/bookingEnd được kiểm tra bảo thủ theo từng khoảng 30 phút.
+- Đặt mang đi online và gia hạn qua Waiter duyệt chưa triển khai theo yêu cầu hoãn của người dùng.
+- Phần cứng camera/rung và ba máy vật lý vẫn cần nghiệm thu thực tế. Build web/test phần mềm không thay thế kiểm thử này.

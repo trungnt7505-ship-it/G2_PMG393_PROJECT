@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
+import 'package:flutter/foundation.dart';
 import '../models/session_model.dart';
 import '../constants/app_config.dart';
 import 'clock_service.dart';
@@ -25,6 +26,7 @@ class AlarmService {
   /// Khởi tạo cấu hình kênh thông báo và quyền rung trên thiết bị Android/iOS.
   Future<void> init() async {
     if (_isInitialized) return;
+    if (kIsWeb) { _isInitialized = true; return; }
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -40,6 +42,7 @@ class AlarmService {
     );
 
     await _notificationsPlugin.initialize(initSettings);
+    await _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
     _isInitialized = true;
   }
 
@@ -68,8 +71,8 @@ class AlarmService {
             ? 'Hết giờ dùng bàn!'
             : 'Nhắc nhở: Còn $threshold phút',
         body: threshold == 0
-            ? 'undefined đã hết giờ. Vui lòng thanh toán hoặc gia hạn.'
-            : 'undefined còn $threshold phút trước khi kết thúc phiên.');
+            ? '${s.tableName} đã hết giờ. Vui lòng thanh toán hoặc gia hạn.'
+            : '${s.tableName} còn $threshold phút trước khi kết thúc phiên.');
   }
 
   /// Định kỳ mỗi giây hoặc mỗi lượt tick của đồng hồ quét toàn bộ danh sách phiên đang hoạt động.

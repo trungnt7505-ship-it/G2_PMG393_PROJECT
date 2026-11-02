@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../repositories/customer_repository.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../viewmodels/active_session_viewmodel.dart';
+import '../session/active_session_screen.dart';
 import '../../widgets/active_session_banner.dart';
 import '../../widgets/member_qr_dialog.dart';
 import '../../widgets/item_options_dialog.dart';
@@ -28,6 +30,8 @@ class CustomerHomeScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).value;
     final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final activeSessionAsync = ref.watch(activeCustomerSessionProvider);
+    // Keep the draft alive while navigating from the home menu to the session.
+    ref.watch(activeSessionViewModelProvider);
     final filteredMenuAsync = ref.watch(filteredMenuItemsProvider);
     final homeState = ref.watch(homeViewModelProvider);
     final homeVm = ref.read(homeViewModelProvider.notifier);
@@ -297,10 +301,22 @@ class CustomerHomeScreen extends ConsumerWidget {
                                   builder: (_) => ItemOptionsDialog(
                                     item: item,
                                     onConfirm: (orderItem) {
+                                      final session = ref.read(activeCustomerSessionProvider).valueOrNull;
+                                      if (session != null && session.isActive) {
+                                        ref.read(activeSessionViewModelProvider.notifier).addToDraftCart(orderItem);
+                                        // Wait for the options dialog to close before opening the cart.
+                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                          if (!context.mounted) return;
+                                          Navigator.of(context).push(MaterialPageRoute<void>(
+                                            builder: (_) => ActiveSessionScreen(sessionId: session.id),
+                                          ));
+                                        });
+                                        return;
+                                      }
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
-                                          content: Text('Đã chọn ${orderItem.name} (${orderItem.qty})'),
-                                          duration: const Duration(seconds: 1),
+                                          content: const Text('Vui lòng nhận bàn để gọi món, hoặc chọn Đặt bàn trước để đặt kèm món.'),
+                                          duration: const Duration(seconds: 4),
                                         ),
                                       );
                                     },
