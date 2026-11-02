@@ -382,14 +382,14 @@ Phạm vi sửa của Dương gồm `packages/core/lib/theme/`, `packages/core/l
 Ứng dụng tối ưu mobile dọc, tuân thủ MVVM + Service/Repository, có trạng thái loading/error/empty và phản hồi lỗi quyền/mạng. Các class/màn hình chính có DartDoc như Mục 7. Không để Firebase CRUD trong widget.
 
 1. **CustomerAuthScreen:** đăng nhập qua `AuthService.signInWithEmail(... allowedRoles: [UserRole.customer])`; đăng ký qua `registerCustomer`; khôi phục trạng thái qua `currentUserProvider`; đăng xuất qua `signOut`. Không dùng đăng nhập giả khi Firebase lỗi.
-2. **CustomerHomeScreen:** thẻ thành viên, điểm, QR `cafe://member/{uid}`, phiên đang dùng nếu có, lối vào đặt bàn và quét QR. QR thành viên chỉ mang UID; quầy phải xác minh UID/role bằng AuthService, không tin dữ liệu QR như quyền xác thực.
-3. **ReservationBookingScreen:** chọn thời gian, nhập số khách, gọi `getAvailableTables`, chọn bàn rồi `createReservation`; service kiểm tra giới hạn và transaction khóa slot. Hiển thị URI QR `cafe://preorder/{resId}` sau khi thành công. Chọn món/tùy chọn đặt trước chưa có UI.
+2. **CustomerHomeScreen:** thẻ thành viên, điểm, QR `cafe://member/{uid}`, phiên đang dùng nếu có, lối vào đặt bàn và quét QR; menu có giỏ món để gửi đơn pending cho waiter khi khách đang dùng bàn hoặc chuyển món đã chọn sang bước đặt bàn/đặt trước. QR thành viên chỉ mang UID; quầy phải xác minh UID/role bằng AuthService, không tin dữ liệu QR như quyền xác thực.
+3. **ReservationBookingScreen:** chọn thời gian, nhập số khách, gọi `getAvailableTables`, chọn bàn rồi `createReservation`; service kiểm tra giới hạn và transaction khóa slot. Hỗ trợ chọn món/tùy chọn đặt trước từ màn đặt bàn hoặc chuyển từ giỏ menu trang chủ; hiển thị URI QR `cafe://preorder/{resId}` sau khi thành công.
 4. **MyReservationsScreen:** dùng `customerReservationsProvider`, hiển thị lịch và QR; hủy qua `cancelReservation`; hỗ trợ đi đến luồng nhận bàn. Không tự sửa document reservation.
 5. **TableQrScannerScreen:** hiện nhận URI QR nhập/dán và gọi `checkInByTableQr`; service kiểm tra định dạng, secret và trạng thái bàn. Camera permission có trong Android manifest nhưng app chưa tích hợp camera scanner/plugin.
-6. **ActiveSessionScreen:** theo dõi session/orders, countdown theo core clock, khởi tạo/sync AlarmService, gia hạn, trả sớm, gọi phục vụ, yêu cầu thanh toán và gửi món chưa cần tùy chọn. UI món yêu cầu option bắt buộc đang được ẩn; các màn nhắc giờ nền theo mọi mốc config cần kiểm tra thêm trên thiết bị.
+6. **ActiveSessionScreen:** theo dõi session/orders, countdown theo core clock, khởi tạo/sync AlarmService, gửi yêu cầu gia hạn để waiter duyệt, trả sớm, gọi phục vụ, yêu cầu thanh toán và gửi món kèm tùy chọn.
 7. **PointsAndHistoryScreen:** lịch sử pointTx và thanh toán của khách hiện chưa có API stream chuyên biệt trong core. Đề xuất bổ sung API có kiểm soát quyền trước khi triển khai; không dùng truy vấn Firestore trực tiếp ở UI. Không hiển thị dữ liệu payment của khách khác.
 
-**Còn thiếu để nghiệm thu:** PointsAndHistoryScreen (core chưa có API stream lịch sử an toàn), camera scanner thật, lựa chọn món/tùy chọn đặt trước, lựa chọn option khi gọi món, test widget CountdownTimerWidget/UI, Android Firebase options customer-specific và xác nhận quyền/rung/notification trên thiết bị thật.
+**Còn thiếu để nghiệm thu:** PointsAndHistoryScreen (core chưa có API stream lịch sử an toàn), camera scanner thật, test widget CountdownTimerWidget/UI, Android Firebase options customer-specific và xác nhận quyền/rung/notification trên thiết bị thật.
 
 ### Tiêu chí hoàn thành Phần B
 
@@ -427,7 +427,7 @@ Tab 1: Duyệt đơn (pending) từ khách tự đặt -> Nút "Duyệt" (approv
 
 Tab 2: Món chờ bưng (ready) -> Nút "Đã mang ra bàn" (served).
 
-Tab 3: Yêu cầu từ bàn (requests) -> Xử lý khách gọi phục vụ, khách báo trả bàn sớm, khách yêu cầu tính tiền.
+Tab 3: Yêu cầu từ bàn (requests) -> Xử lý khách gọi phục vụ, khách báo trả bàn sớm, khách yêu cầu tính tiền; yêu cầu gia hạn được hiển thị realtime và chỉ đóng sau khi waiter duyệt trong transaction.
 
 
 ---
@@ -470,7 +470,7 @@ Mỗi thành viên phải có thư mục `test/` trong phạm vi của mình và
 - Counter có sơ đồ bàn theo zone, hàng đợi, xử lý món, đơn mang đi, tra thành viên, thanh toán và hóa đơn đã lưu. Màn hình rộng từ 1200px dùng ba cột; màn hình nhỏ dùng ba tab. Có tải/lỗi/thử lại và chặn thao tác lặp khi đang xử lý.
 - Manager có quản lý món, cấu hình, seed, thống kê trong ngày và mở lại hóa đơn. Route `/admin` chỉ cho manager; counter được chuyển về POS. Manager vẫn dùng được POS.
 - Waiter đã có sơ đồ bàn, thao tác phiên, gọi món hộ, duyệt/giao món và xử lý yêu cầu; bổ sung nền tảng web cho demo laptop, cảnh báo trong giao diện, đăng nhập Firebase thật và thử lại khi khởi tạo lỗi. Hướng dẫn: [README waiter_app](apps/waiter_app/README.md).
-- Customer từ main đã tích hợp vào nhánh làm việc: có cấu hình Firebase web, đăng nhập/đăng ký, đặt bàn và món trước, QR, phiên bàn/gọi thêm món, lịch sử điểm và hóa đơn. Chưa nghiệm thu luồng ba app trên nhiều máy thật.
+- Customer từ main đã tích hợp vào nhánh làm việc: có cấu hình Firebase web, đăng nhập/đăng ký, đặt bàn và món trước, QR, phiên bàn/gọi thêm món, lịch sử điểm và hóa đơn. Khách không ngồi tại bàn có thể đặt món mang đi và hẹn giờ nhận; thông tin hẹn lấy/liên hệ được hiển thị trong hàng đợi waiter và quầy. Chưa nghiệm thu luồng ba app trên nhiều máy thật.
 
 ### 8.2. Thống kê trong ngày
 

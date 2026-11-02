@@ -30,7 +30,8 @@ class ActiveSessionState {
     return ActiveSessionState(
       isActionLoading: isActionLoading ?? this.isActionLoading,
       actionError: clearMessages ? null : (actionError ?? this.actionError),
-      actionSuccess: clearMessages ? null : (actionSuccess ?? this.actionSuccess),
+      actionSuccess:
+          clearMessages ? null : (actionSuccess ?? this.actionSuccess),
       draftCart: draftCart ?? this.draftCart,
     );
   }
@@ -103,7 +104,8 @@ class ActiveSessionViewModel extends StateNotifier<ActiveSessionState> {
       state = state.copyWith(
         isActionLoading: false,
         draftCart: const [],
-        actionSuccess: 'Đã gửi ${state.draftCart.length} món thành công! Vui lòng chờ nhân viên xác nhận.',
+        actionSuccess:
+            'Đã gửi ${state.draftCart.length} món thành công! Vui lòng chờ nhân viên xác nhận.',
       );
       return true;
     } catch (e) {
@@ -115,21 +117,24 @@ class ActiveSessionViewModel extends StateNotifier<ActiveSessionState> {
     }
   }
 
-  /// Gia hạn phiên bàn hiện tại (+30 phút hoặc tối đa tới lịch hẹn tiếp theo).
-  Future<bool> extendSession(String sessionId, String uid) async {
+  /// Gửi yêu cầu gia hạn phiên bàn để waiter duyệt.
+  Future<bool> requestSessionExtension(String sessionId, String uid) async {
     state = state.copyWith(isActionLoading: true, clearMessages: true);
     try {
-      final addedMinutes =
-          await _repository.extendSession(sessionId, byUid: uid);
+      await _repository.requestSessionExtension(
+        sessionId,
+        customerId: uid,
+      );
       state = state.copyWith(
         isActionLoading: false,
-        actionSuccess: 'Gia hạn thành công thêm $addedMinutes phút!',
+        actionSuccess:
+            'Đã gửi yêu cầu gia hạn. Vui lòng chờ nhân viên phục vụ duyệt.',
       );
       return true;
     } catch (e) {
       state = state.copyWith(
         isActionLoading: false,
-        actionError: 'Không thể gia hạn: $e',
+        actionError: 'Không thể gửi yêu cầu gia hạn: $e',
       );
       return false;
     }
@@ -206,7 +211,8 @@ class ActiveSessionViewModel extends StateNotifier<ActiveSessionState> {
       );
       state = state.copyWith(
         isActionLoading: false,
-        actionSuccess: 'Đã gửi yêu cầu tính tiền! Thu ngân đang chuẩn bị hóa đơn cho bạn.',
+        actionSuccess:
+            'Đã gửi yêu cầu tính tiền! Thu ngân đang chuẩn bị hóa đơn cho bạn.',
       );
       return true;
     } catch (e) {
@@ -220,8 +226,8 @@ class ActiveSessionViewModel extends StateNotifier<ActiveSessionState> {
 }
 
 /// Provider cho ActiveSessionViewModel.
-final activeSessionViewModelProvider =
-    StateNotifierProvider.autoDispose<ActiveSessionViewModel, ActiveSessionState>((ref) {
+final activeSessionViewModelProvider = StateNotifierProvider.autoDispose<
+    ActiveSessionViewModel, ActiveSessionState>((ref) {
   return ActiveSessionViewModel(
     repository: ref.watch(customerRepositoryProvider),
   );

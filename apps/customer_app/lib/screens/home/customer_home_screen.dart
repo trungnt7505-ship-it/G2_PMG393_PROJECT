@@ -8,6 +8,7 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/active_session_banner.dart';
 import '../../widgets/member_qr_dialog.dart';
 import '../../widgets/item_options_dialog.dart';
+import '../../widgets/pickup_time_dialog.dart';
 import '../reservation/reservation_booking_screen.dart';
 import '../reservation/my_reservations_screen.dart';
 import '../scanner/table_qr_scanner_screen.dart';
@@ -26,12 +27,14 @@ class CustomerHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider).value;
-    final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
+    final config =
+        ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final activeSessionAsync = ref.watch(activeCustomerSessionProvider);
     final filteredMenuAsync = ref.watch(filteredMenuItemsProvider);
     final homeState = ref.watch(homeViewModelProvider);
     final homeVm = ref.read(homeViewModelProvider.notifier);
     final formatter = NumberFormat('#,###', 'vi_VN');
+    final activeSession = activeSessionAsync.valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -75,6 +78,193 @@ class CustomerHomeScreen extends ConsumerWidget {
           ),
         ],
       ),
+      bottomNavigationBar: homeState.draftCart.isEmpty
+          ? null
+          : SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFECE5DE)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 10,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.shopping_bag_outlined,
+                            color: Color(0xFF5D4037)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${homeState.draftCart.length} món trong giỏ',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                homeState.draftCart
+                                    .map((item) => '${item.qty}x ${item.name}')
+                                    .join(', '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '${formatter.format(homeState.draftCartTotal)} đ',
+                          style: const TextStyle(
+                            color: Color(0xFF5D4037),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Xóa giỏ món',
+                          onPressed: homeVm.clearCart,
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.red),
+                        ),
+                      ],
+                    ),
+                    if (homeState.orderError != null)
+                      Text(
+                        homeState.orderError!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    if (activeSession != null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: homeState.isSubmittingOrder ||
+                                    activeSessionAsync.isLoading ||
+                                    activeSessionAsync.hasError
+                                ? null
+                                : () async {
+                                    final submitted = await homeVm.submitOrder(
+                                      session: activeSession,
+                                      uid: user?.id ?? '',
+                                    );
+                                    if (context.mounted && submitted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Đã gửi đơn đến nhân viên phục vụ để xác nhận.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                            icon: homeState.isSubmittingOrder
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.send),
+                            label: const Text('Gửi đơn tại bàn cho waiter'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF5D4037),
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed:
+                                homeState.isSubmittingOrder || user == null
+                                    ? null
+                                    : () => _submitTakeawayOrder(
+                                          context,
+                                          homeVm,
+                                          user,
+                                          config.maxAdvanceDays,
+                                        ),
+                            icon: const Icon(Icons.takeout_dining),
+                            label:
+                                const Text('Đặt mang đi · hẹn giờ nhận riêng'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF5D4037),
+                              minimumSize: const Size.fromHeight(46),
+                            ),
+                          ),
+                        ],
+                      )
+                    else ...[
+                      FilledButton.icon(
+                        onPressed: homeState.isSubmittingOrder ||
+                                activeSessionAsync.isLoading ||
+                                activeSessionAsync.hasError ||
+                                user == null
+                            ? null
+                            : () => _submitTakeawayOrder(
+                                  context,
+                                  homeVm,
+                                  user,
+                                  config.maxAdvanceDays,
+                                ),
+                        icon: homeState.isSubmittingOrder
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.takeout_dining),
+                        label: const Text('Đặt mang đi · hẹn giờ nhận'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF5D4037),
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: activeSessionAsync.isLoading ||
+                                activeSessionAsync.hasError
+                            ? null
+                            : () async {
+                                final preOrderItems = List<OrderItemModel>.from(
+                                    homeState.draftCart);
+                                await Navigator.of(context)
+                                    .push(MaterialPageRoute<void>(
+                                  builder: (_) => ReservationBookingScreen(
+                                    initialPreOrderItems: preOrderItems,
+                                    onReservationCreated: homeVm.clearCart,
+                                  ),
+                                ));
+                              },
+                        icon: const Icon(Icons.event_available),
+                        label: const Text('Đặt bàn & dùng tại quán'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF5D4037),
+                          minimumSize: const Size.fromHeight(46),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
@@ -163,8 +353,10 @@ class CustomerHomeScreen extends ConsumerWidget {
                       onPressed: () => homeVm.updateSearchQuery(''),
                     )
                   : null,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -190,8 +382,10 @@ class CustomerHomeScreen extends ConsumerWidget {
                     selectedColor: const Color(0xFFD7CCC8),
                     checkmarkColor: const Color(0xFF5D4037),
                     labelStyle: TextStyle(
-                      color: isSelected ? const Color(0xFF3E2723) : Colors.black87,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color:
+                          isSelected ? const Color(0xFF3E2723) : Colors.black87,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 12,
                     ),
                     onSelected: (_) => homeVm.selectCategory(category),
@@ -236,7 +430,8 @@ class CustomerHomeScreen extends ConsumerWidget {
                       side: const BorderSide(color: Color(0xFFEBE5DF)),
                     ),
                     child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
                       leading: Container(
                         width: 48,
                         height: 48,
@@ -244,26 +439,30 @@ class CustomerHomeScreen extends ConsumerWidget {
                           color: const Color(0xFFEFEBE9),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.coffee, color: Color(0xFF6D4C41), size: 24),
+                        child: const Icon(Icons.coffee,
+                            color: Color(0xFF6D4C41), size: 24),
                       ),
                       title: Row(
                         children: [
                           Expanded(
                             child: Text(
                               item.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15),
                             ),
                           ),
                           if (!item.available)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
                                 'Tạm hết',
-                                style: TextStyle(color: Colors.black45, fontSize: 10),
+                                style: TextStyle(
+                                    color: Colors.black45, fontSize: 10),
                               ),
                             ),
                         ],
@@ -274,7 +473,8 @@ class CustomerHomeScreen extends ConsumerWidget {
                           const SizedBox(height: 4),
                           Text(
                             item.category,
-                            style: const TextStyle(color: Colors.black54, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.black54, fontSize: 12),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -288,44 +488,23 @@ class CustomerHomeScreen extends ConsumerWidget {
                         ],
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.add_circle, color: Color(0xFF5D4037), size: 30),
+                        icon: const Icon(Icons.add_circle,
+                            color: Color(0xFF5D4037), size: 30),
                         tooltip: 'Xem tùy chọn món',
                         onPressed: item.available
-                            ? () {
-                                showDialog<void>(
-                                  context: context,
-                                  builder: (_) => ItemOptionsDialog(
-                                    item: item,
-                                    onConfirm: (orderItem) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Đã chọn ${orderItem.name} (${orderItem.qty})'),
-                                          duration: const Duration(seconds: 1),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                );
-                              }
+                            ? () => _showMenuItemOptions(
+                                  context,
+                                  item,
+                                  homeVm,
+                                )
                             : null,
                       ),
                       onTap: item.available
-                          ? () {
-                              showDialog<void>(
-                                context: context,
-                                builder: (_) => ItemOptionsDialog(
-                                  item: item,
-                                  onConfirm: (orderItem) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Đã chọn ${orderItem.name} (${orderItem.qty})'),
-                                        duration: const Duration(seconds: 1),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              );
-                            }
+                          ? () => _showMenuItemOptions(
+                                context,
+                                item,
+                                homeVm,
+                              )
                           : null,
                     ),
                   );
@@ -344,6 +523,56 @@ class CustomerHomeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _showMenuItemOptions(
+    BuildContext context,
+    MenuItemModel item,
+    HomeViewModel viewModel,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => ItemOptionsDialog(
+        item: item,
+        onConfirm: viewModel.addToCart,
+      ),
+    );
+  }
+
+  Future<void> _submitTakeawayOrder(
+    BuildContext context,
+    HomeViewModel viewModel,
+    UserModel user,
+    int maxAdvanceDays,
+  ) async {
+    final now = ClockService.instance.serverNow;
+    final initialPickupAt = now.add(const Duration(minutes: 30));
+    final pickupAt = await showDialog<DateTime>(
+      context: context,
+      builder: (_) => PickupTimeDialog(
+        initialPickupAt: initialPickupAt,
+        maxAdvanceDays: maxAdvanceDays,
+      ),
+    );
+    if (pickupAt == null || !context.mounted) return;
+
+    final submitted = await viewModel.submitTakeawayOrder(
+      uid: user.id,
+      customerName: user.displayName,
+      customerPhone: user.phone,
+      pickupAt: pickupAt,
+    );
+    if (submitted && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã gửi đơn mang đi. Hẹn bạn lúc '
+            '${DateFormat('HH:mm · dd/MM').format(pickupAt)}; '
+            'vui lòng chờ quán xác nhận.',
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildMemberCard(
@@ -389,7 +618,9 @@ class CustomerHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      user.displayName.isNotEmpty ? user.displayName : 'Khách hàng',
+                      user.displayName.isNotEmpty
+                          ? user.displayName
+                          : 'Khách hàng',
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -399,13 +630,15 @@ class CustomerHomeScreen extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       user.phone.isNotEmpty ? user.phone : user.email,
-                      style: const TextStyle(color: Colors.black54, fontSize: 13),
+                      style:
+                          const TextStyle(color: Colors.black54, fontSize: 13),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF3E0),
                   borderRadius: BorderRadius.circular(12),
@@ -479,7 +712,8 @@ class CustomerHomeScreen extends ConsumerWidget {
             child: const Text('Hủy'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5D4037)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF5D4037)),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Đăng xuất'),
           ),
@@ -538,7 +772,8 @@ class _QuickActionButton extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 2),
               Text(

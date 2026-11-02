@@ -14,8 +14,10 @@ class WaiterTaskHubScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pendingOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.pending]));
-    final readyOrdersAsync = ref.watch(ordersByStatusesProvider(const [OrderStatus.ready]));
+    final pendingOrdersAsync =
+        ref.watch(ordersByStatusesProvider(const [OrderStatus.pending]));
+    final readyOrdersAsync =
+        ref.watch(ordersByStatusesProvider(const [OrderStatus.ready]));
     final openRequestsAsync = ref.watch(openRequestsProvider);
 
     final pendingCount = pendingOrdersAsync.valueOrNull?.length ?? 0;
@@ -107,7 +109,8 @@ class _PendingOrdersTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormatter = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+    final currencyFormatter =
+        NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
     final taskHubViewModel = ref.read(taskHubViewModelProvider.notifier);
 
     return pendingOrdersAsync.when(
@@ -160,6 +163,32 @@ class _PendingOrdersTab extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (order.orderType == OrderType.takeaway) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        order.pickupAt == null
+                            ? 'Mang đi'
+                            : 'Hẹn lấy: ${DateFormat('HH:mm · dd/MM/yyyy').format(order.pickupAt!)}',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if ((order.customerName ?? '').isNotEmpty ||
+                          (order.customerPhone ?? '').isNotEmpty)
+                        Text(
+                          [
+                            if ((order.customerName ?? '').isNotEmpty)
+                              order.customerName!,
+                            if ((order.customerPhone ?? '').isNotEmpty)
+                              order.customerPhone!,
+                          ].join(' · '),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                    ],
                     const Divider(),
                     ...order.items.map((item) {
                       final optionsText = item.selectedOptions
@@ -431,6 +460,7 @@ class _OpenRequestsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isProcessing = ref.watch(taskHubViewModelProvider).isLoading;
     final taskHubViewModel = ref.read(taskHubViewModelProvider.notifier);
 
     return openRequestsAsync.when(
@@ -482,6 +512,11 @@ class _OpenRequestsTab extends ConsumerWidget {
                 tagColor = Colors.purple;
                 iconData = Icons.star;
                 break;
+              case RequestType.extend_session:
+                titleLabel = 'XIN GIA HẠN THỜI GIAN';
+                tagColor = Colors.deepOrange;
+                iconData = Icons.more_time;
+                break;
             }
 
             return Card(
@@ -531,19 +566,59 @@ class _OpenRequestsTab extends ConsumerWidget {
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: () async {
-                        final ok = await taskHubViewModel.resolveRequest(req.id);
-                        if (ok && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Đã xử lý xong yêu cầu!')),
-                          );
-                        }
-                      },
+                      onPressed: isProcessing
+                          ? null
+                          : () async {
+                              if (req.requestType ==
+                                  RequestType.extend_session) {
+                                final addedMinutes = await taskHubViewModel
+                                    .approveExtensionRequest(
+                                  req.id,
+                                  byUid: ref
+                                          .read(authServiceProvider)
+                                          .currentUid ??
+                                      '',
+                                );
+                                if (context.mounted) {
+                                  final errorMessage = ref
+                                          .read(taskHubViewModelProvider)
+                                          .whenOrNull(
+                                            error: (error, _) =>
+                                                error.toString(),
+                                          ) ??
+                                      'Vui lòng thử lại.';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        addedMinutes == null
+                                            ? 'Không thể duyệt yêu cầu gia hạn: $errorMessage'
+                                            : 'Đã duyệt gia hạn thêm $addedMinutes phút '
+                                                'cho ${req.tableName}.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } else {
+                                final ok = await taskHubViewModel
+                                    .resolveRequest(req.id);
+                                if (ok && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Đã xử lý xong yêu cầu!'),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Đã xong'),
+                      child: Text(
+                        req.requestType == RequestType.extend_session
+                            ? 'Duyệt gia hạn'
+                            : 'Đã xong',
+                      ),
                     ),
                   ],
                 ),

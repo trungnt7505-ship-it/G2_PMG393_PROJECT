@@ -102,6 +102,20 @@ final openRequestsProvider = StreamProvider<List<RequestModel>>((ref) {
   return ref.watch(sessionServiceProvider).watchOpenRequests();
 });
 
+/// Yêu cầu gia hạn đang chờ duyệt cho một phiên bàn.
+final pendingExtensionRequestProvider =
+    StreamProvider.family<RequestModel?, String>((ref, sessionId) {
+  return ref.watch(sessionServiceProvider).watchOpenRequests().map((requests) {
+    for (final request in requests) {
+      if (request.sessionId == sessionId &&
+          request.requestType == RequestType.extend_session) {
+        return request;
+      }
+    }
+    return null;
+  });
+});
+
 /// Stream danh sách các đơn đặt bàn confirmed trong ngày hôm nay.
 final todayConfirmedReservationsProvider =
     StreamProvider<List<ReservationModel>>((ref) {

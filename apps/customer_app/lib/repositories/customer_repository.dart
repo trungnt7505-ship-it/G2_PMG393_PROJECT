@@ -105,14 +105,22 @@ class CustomerRepository {
     );
   }
 
-  /// Gia hạn phiên bàn hiện tại.
-  Future<int> extendSession(String sessionId, {required String byUid}) {
-    return _sessionService.extendSession(sessionId, byUid: byUid);
+  /// Gửi yêu cầu gia hạn phiên bàn để waiter phê duyệt.
+  Future<void> requestSessionExtension(
+    String sessionId, {
+    required String customerId,
+  }) {
+    return _sessionService.requestSessionExtension(
+      sessionId,
+      customerId: customerId,
+    );
   }
 
   /// Yêu cầu xin trả bàn sớm để nhận điểm thưởng `earlyReleaseBonusPoints`.
-  Future<void> requestEarlyRelease(String sessionId, {required String customerId}) {
-    return _sessionService.requestEarlyRelease(sessionId, customerId: customerId);
+  Future<void> requestEarlyRelease(String sessionId,
+      {required String customerId}) {
+    return _sessionService.requestEarlyRelease(sessionId,
+        customerId: customerId);
   }
 
   /// Gửi yêu cầu hỗ trợ (gọi phục vụ hoặc xin tính tiền).
@@ -152,6 +160,28 @@ class CustomerRepository {
       type: OrderType.dine_in,
     );
   }
+
+  /// Tạo đơn mang đi chờ duyệt, kèm thời gian hẹn và thông tin nhận hàng.
+  Future<String> submitTakeawayOrder({
+    required List<OrderItemModel> items,
+    required String createdBy,
+    required String customerName,
+    required String customerPhone,
+    required DateTime pickupAt,
+  }) {
+    return _orderService.submitOrder(
+      sessionId: 'takeaway_orders',
+      tableId: 'takeaway',
+      tableName: 'Đơn mang đi',
+      items: items,
+      createdBy: createdBy,
+      createdByRole: 'customer',
+      type: OrderType.takeaway,
+      pickupAt: pickupAt,
+      customerName: customerName,
+      customerPhone: customerPhone,
+    );
+  }
 }
 
 /// Provider cho [CustomerRepository].
@@ -168,7 +198,9 @@ final customerRepositoryProvider = Provider<CustomerRepository>((ref) {
 final activeCustomerSessionProvider = StreamProvider<SessionModel?>((ref) {
   final user = ref.watch(currentUserProvider).value;
   if (user == null) return Stream.value(null);
-  return ref.watch(customerRepositoryProvider).watchActiveSessionForCustomer(user.id);
+  return ref
+      .watch(customerRepositoryProvider)
+      .watchActiveSessionForCustomer(user.id);
 });
 
 /// StreamProvider theo dõi lịch sử biến động điểm tích lũy của khách hàng hiện tại.

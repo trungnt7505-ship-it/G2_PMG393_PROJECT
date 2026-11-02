@@ -108,23 +108,32 @@ class SessionService {
     // Preflight avoids wrapping business errors in the web transaction bridge.
     // The transaction still validates the reservation before writing.
     if (reservationId != null) {
-      final snapshot = await _firestore.collection('reservations').doc(reservationId).get();
-      if (!snapshot.exists) throw StateError('Không tìm thấy đặt bàn để nhận bàn.');
-      final reservation = ReservationModel.fromMap(snapshot.data()!, snapshot.id);
+      final snapshot =
+          await _firestore.collection('reservations').doc(reservationId).get();
+      if (!snapshot.exists)
+        throw StateError('Không tìm thấy đặt bàn để nhận bàn.');
+      final reservation =
+          ReservationModel.fromMap(snapshot.data()!, snapshot.id);
       final config = await ConfigService(firestore: _firestore).read();
-      final earliest = reservation.startTime.subtract(Duration(minutes: config.checkInEarlyMinutes));
+      final earliest = reservation.startTime
+          .subtract(Duration(minutes: config.checkInEarlyMinutes));
       String format(DateTime value) {
         final local = value.toLocal();
         return '${local.day}/${local.month} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
       }
-      if (reservation.reservationStatus != ReservationStatus.confirmed || reservation.tableId != tableId) {
-        throw StateError('Đặt bàn không còn chờ nhận hoặc không thuộc bàn đã chọn.');
+
+      if (reservation.reservationStatus != ReservationStatus.confirmed ||
+          reservation.tableId != tableId) {
+        throw StateError(
+            'Đặt bàn không còn chờ nhận hoặc không thuộc bàn đã chọn.');
       }
       if (now.isBefore(earliest)) {
-        throw StateError('Chưa đến giờ check-in. Có thể nhận bàn từ ${format(earliest)}.');
+        throw StateError(
+            'Chưa đến giờ check-in. Có thể nhận bàn từ ${format(earliest)}.');
       }
       if (now.isAfter(reservation.holdUntil)) {
-        throw StateError('Đã quá hạn giữ bàn lúc ${format(reservation.holdUntil)}.');
+        throw StateError(
+            'Đã quá hạn giữ bàn lúc ${format(reservation.holdUntil)}.');
       }
     }
 
@@ -374,36 +383,7 @@ class SessionService {
         throw Exception('Phiên dùng bàn đã kết thúc, không thể gia hạn.');
       }
 
-      int minutesToAdd = config.extendStepMinutes; // 30 phút
-
-      // Kiểm tra slot đặt tiếp theo sau thời điểm hết hạn hiện tại
-      final nextSlots = await _firestore
-          .collection('tables')
-          .doc(session.tableId)
-          .collection('slots')
-          .where('resStart',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(session.expiresAt))
-          .orderBy('resStart')
-          .get();
-
-      // Slot còn lại của chính lịch đã check-in không phải lượt khách tiếp theo.
-      final otherSlots = nextSlots.docs.where((doc) =>
-          doc.data()['reservationId'] != session.reservationId);
-      if (otherSlots.isNotEmpty) {
-        final nextSlot = otherSlots.first.data();
-        final nextStart = (nextSlot['resStart'] as Timestamp).toDate();
-        final maxExtendMinutes =
-            nextStart.difference(session.expiresAt).inMinutes -
-                config.bufferMinutes;
-
-        if (maxExtendMinutes < 10) {
-          throw Exception(
-            'Không thể gia hạn thêm vì bàn đã có khách đặt trước ngay sau đó.',
-          );
-        }
-
-        minutesToAdd = min(minutesToAdd, maxExtendMinutes);
-      }
+      final minutesToAdd = await _getAllowedExtensionMinutes(session, config);
 
       final newExpiresAt =
           session.expiresAt.add(Duration(minutes: minutesToAdd));
@@ -418,6 +398,147 @@ class SessionService {
 
       return minutesToAdd;
     });
+  }
+
+  /// Tạo yêu cầu xin gia hạn từ khách; thời gian chỉ được cộng khi waiter duyệt.
+  Future<void> requestSessionExtension(
+    String sessionId, {
+    required String customerId,
+  }) async {
+    final sessionRef = _firestore.collection('sessions').doc(sessionId);
+    final requestRef = _firestore.collection('requests').doc();
+    final now = ClockService.instance.serverNow;
+
+    await _firestore.runTransaction<void>((transaction) async {
+      final sessionSnapshot = await transaction.get(sessionRef);
+      if (!sessionSnapshot.exists || sessionSnapshot.data() == null) {
+        throw Exception('Không tìm thấy phiên dùng bàn.');
+      }
+
+      final session =
+          SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
+      if (!session.isActive || session.customerId != customerId) {
+        throw StateError('Không thể xin gia hạn cho phiên này.');
+      }
+      if (sessionSnapshot.data()!['pendingExtensionRequestId'] != null) {
+        throw StateError('Yêu cầu gia hạn của phiên này đang chờ duyệt.');
+      }
+
+      final request = RequestModel(
+        id: requestRef.id,
+        sessionId: sessionId,
+        tableId: session.tableId,
+        tableName: session.tableName,
+        type: RequestType.extend_session.name,
+        message: 'Khách xin gia hạn thêm thời gian cho phiên bàn.',
+        createdBy: customerId,
+        createdAt: now,
+      );
+      transaction.update(sessionRef, {
+        'pendingExtensionRequestId': requestRef.id,
+      });
+      transaction.set(requestRef, request.toMap());
+    });
+  }
+
+  /// Duyệt yêu cầu gia hạn và cập nhật phiên + yêu cầu trong cùng transaction.
+  Future<int> approveSessionExtension(
+    String requestId, {
+    required String byUid,
+  }) async {
+    final now = ClockService.instance.serverNow;
+    final requestRef = _firestore.collection('requests').doc(requestId);
+
+    return _firestore.runTransaction<int>((transaction) async {
+      final requestSnapshot = await transaction.get(requestRef);
+      final requestData = requestSnapshot.data();
+      if (requestData == null) {
+        throw Exception('Không tìm thấy yêu cầu gia hạn.');
+      }
+
+      final request = RequestModel.fromMap(requestData, requestSnapshot.id);
+      if (!request.isOpen ||
+          request.requestType != RequestType.extend_session) {
+        throw StateError('Yêu cầu gia hạn đã được xử lý hoặc không hợp lệ.');
+      }
+
+      final config = await ConfigService(firestore: _firestore)
+          .read(transaction: transaction);
+      final sessionRef =
+          _firestore.collection('sessions').doc(request.sessionId);
+      final sessionSnapshot = await transaction.get(sessionRef);
+      if (sessionSnapshot.data() == null) {
+        throw Exception('Không tìm thấy phiên dùng bàn.');
+      }
+
+      final session =
+          SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
+      if (!session.isActive) {
+        throw StateError('Phiên dùng bàn đã kết thúc, không thể gia hạn.');
+      }
+      if (session.customerId != request.createdBy) {
+        throw StateError('Yêu cầu gia hạn không thuộc khách của phiên bàn.');
+      }
+      if (sessionSnapshot.data()!['pendingExtensionRequestId'] != request.id) {
+        throw StateError('Yêu cầu gia hạn không còn hiệu lực.');
+      }
+
+      final minutesToAdd = await _getAllowedExtensionMinutes(session, config);
+      final newExpiresAt =
+          session.expiresAt.add(Duration(minutes: minutesToAdd));
+      final updatedExtensions = List<SessionExtension>.from(session.extensions)
+        ..add(SessionExtension(at: now, minutes: minutesToAdd, by: byUid));
+
+      transaction.update(sessionRef, {
+        'extendedMinutes': session.extendedMinutes + minutesToAdd,
+        'expiresAt': Timestamp.fromDate(newExpiresAt),
+        'extensions': updatedExtensions.map((e) => e.toMap()).toList(),
+        'pendingExtensionRequestId': null,
+      });
+      transaction.update(requestRef, {
+        'status': 'done',
+        'resolution': 'approved',
+        'resolvedBy': byUid,
+      });
+
+      return minutesToAdd;
+    });
+  }
+
+  Future<int> _getAllowedExtensionMinutes(
+    SessionModel session,
+    AppConfig config,
+  ) async {
+    var minutesToAdd = config.extendStepMinutes;
+    final nextSlots = await _firestore
+        .collection('tables')
+        .doc(session.tableId)
+        .collection('slots')
+        .where(
+          'resStart',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(session.expiresAt),
+        )
+        .orderBy('resStart')
+        .get();
+
+    final otherSlots = nextSlots.docs.where(
+      (doc) => doc.data()['reservationId'] != session.reservationId,
+    );
+    if (otherSlots.isNotEmpty) {
+      final nextSlot = otherSlots.first.data();
+      final nextStart = (nextSlot['resStart'] as Timestamp).toDate();
+      final maxExtendMinutes =
+          nextStart.difference(session.expiresAt).inMinutes -
+              config.bufferMinutes;
+
+      if (maxExtendMinutes < 10) {
+        throw Exception(
+          'Không thể gia hạn thêm vì bàn đã có khách đặt trước ngay sau đó.',
+        );
+      }
+      minutesToAdd = min(minutesToAdd, maxExtendMinutes);
+    }
+    return minutesToAdd;
   }
 
   /// Khách hàng yêu cầu trả bàn sớm khi thời gian còn lại >= 30 phút để nhận điểm thưởng.
@@ -540,26 +661,36 @@ class SessionService {
       final tableRef = _firestore.collection('tables').doc(session.tableId);
 
       if (!session.isActive || session.subtotal != 0) {
-        throw StateError('Chỉ được hủy phiên đang mở và chưa phát sinh hóa đơn.');
+        throw StateError(
+            'Chỉ được hủy phiên đang mở và chưa phát sinh hóa đơn.');
       }
       final tableSnapshot = await transaction.get(tableRef);
       if (tableSnapshot.data()?['currentSessionId'] != sessionId) {
-        throw StateError('Bàn không còn thuộc phiên cần hủy. Vui lòng tải lại.');
+        throw StateError(
+            'Bàn không còn thuộc phiên cần hủy. Vui lòng tải lại.');
       }
       final orders = await sessionRef.collection('orders').get();
-      if (orders.docs.any((doc) => doc.data()['status'] != OrderStatus.cancelled.name)) {
-        throw StateError('Phiên đã có đơn món. Hãy xử lý đơn trước khi hủy mở nhầm.');
+      if (orders.docs
+          .any((doc) => doc.data()['status'] != OrderStatus.cancelled.name)) {
+        throw StateError(
+            'Phiên đã có đơn món. Hãy xử lý đơn trước khi hủy mở nhầm.');
       }
       ReservationModel? linkedReservation;
       final slotsToRelease = <DocumentReference<Map<String, dynamic>>>[];
       if (session.reservationId != null) {
         final resSnapshot = await transaction.get(
             _firestore.collection('reservations').doc(session.reservationId));
-        if (resSnapshot.exists && resSnapshot.data()?['sessionId'] == sessionId) {
-          linkedReservation = ReservationModel.fromMap(resSnapshot.data()!, resSnapshot.id);
-          for (final key in TableSlotModel.generateSlotKeys(linkedReservation.startTime)) {
-            final slotRef = _firestore.collection('tables')
-                .doc(linkedReservation.tableId).collection('slots').doc(key);
+        if (resSnapshot.exists &&
+            resSnapshot.data()?['sessionId'] == sessionId) {
+          linkedReservation =
+              ReservationModel.fromMap(resSnapshot.data()!, resSnapshot.id);
+          for (final key
+              in TableSlotModel.generateSlotKeys(linkedReservation.startTime)) {
+            final slotRef = _firestore
+                .collection('tables')
+                .doc(linkedReservation.tableId)
+                .collection('slots')
+                .doc(key);
             final slotSnapshot = await transaction.get(slotRef);
             if (slotSnapshot.data()?['reservationId'] == linkedReservation.id) {
               slotsToRelease.add(slotRef);
@@ -577,7 +708,8 @@ class SessionService {
         'currentSessionId': null,
       });
       if (linkedReservation != null) {
-        transaction.update(_firestore.collection('reservations').doc(linkedReservation.id),
+        transaction.update(
+            _firestore.collection('reservations').doc(linkedReservation.id),
             {'status': ReservationStatus.cancelled.name});
         for (final ref in slotsToRelease) {
           transaction.delete(ref);
@@ -623,8 +755,20 @@ class SessionService {
 
   /// Đánh dấu yêu cầu hỗ trợ đã được nhân viên xử lý xong.
   Future<void> resolveRequest(String requestId) async {
-    await _firestore.collection('requests').doc(requestId).update({
-      'status': 'done',
+    final requestRef = _firestore.collection('requests').doc(requestId);
+    await _firestore.runTransaction<void>((transaction) async {
+      final requestSnapshot = await transaction.get(requestRef);
+      if (!requestSnapshot.exists || requestSnapshot.data() == null) {
+        throw Exception('Không tìm thấy yêu cầu.');
+      }
+      final request =
+          RequestModel.fromMap(requestSnapshot.data()!, requestSnapshot.id);
+      if (request.requestType == RequestType.extend_session) {
+        throw StateError('Yêu cầu gia hạn cần được duyệt riêng.');
+      }
+      transaction.update(requestRef, {
+        'status': 'done',
+      });
     });
   }
 

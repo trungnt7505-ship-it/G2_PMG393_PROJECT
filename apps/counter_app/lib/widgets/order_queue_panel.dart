@@ -266,6 +266,21 @@ class OrderQueuePanel extends ConsumerWidget {
                               style: TextStyle(
                                   fontSize: 11, color: Colors.grey.shade600),
                             ),
+                            if (order.orderType == OrderType.takeaway &&
+                                order.pickupAt != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Hẹn lấy: ${DateFormat('HH:mm · dd/MM/yyyy').format(order.pickupAt!)}'
+                                  '${(order.customerName ?? '').isNotEmpty ? ' • ${order.customerName}' : ''}'
+                                  '${(order.customerPhone ?? '').isNotEmpty ? ' • ${order.customerPhone}' : ''}',
+                                  style: const TextStyle(
+                                    color: Colors.brown,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             const Divider(height: 16),
 
                             // Danh sách món

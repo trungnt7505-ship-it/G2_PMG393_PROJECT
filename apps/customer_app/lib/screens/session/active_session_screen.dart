@@ -41,7 +41,10 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
     final sessionAsync = ref.watch(sessionStreamProvider(widget.sessionId));
     final ordersAsync = ref.watch(sessionOrdersProvider(widget.sessionId));
     final menuAsync = ref.watch(menuItemsProvider);
-    final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
+    final extensionRequestAsync =
+        ref.watch(pendingExtensionRequestProvider(widget.sessionId));
+    final config =
+        ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final uid = ref.watch(authServiceProvider).currentUid ?? '';
     final sessionState = ref.watch(activeSessionViewModelProvider);
     final vm = ref.read(activeSessionViewModelProvider.notifier);
@@ -55,17 +58,28 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
         error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Không tải được phiên bàn: $e', textAlign: TextAlign.center),
+            child: Text('Không tải được phiên bàn: $e',
+                textAlign: TextAlign.center),
           ),
         ),
         data: (session) {
           if (session == null) {
-            return const Center(child: Text('Phiên bàn không còn tồn tại hoặc đã đóng.'));
+            return const Center(
+                child: Text('Phiên bàn không còn tồn tại hoặc đã đóng.'));
           }
+          final extensionRequestPending =
+              extensionRequestAsync.valueOrNull != null;
+          final canRequestExtension = session.isActive &&
+              !sessionState.isActionLoading &&
+              !extensionRequestAsync.isLoading &&
+              !extensionRequestAsync.hasError &&
+              !extensionRequestPending;
 
           // Đồng bộ báo động trên thiết bị
           if (_alarmReady) {
-            ref.read(alarmServiceProvider).syncAlarmsForSession(session, config: config);
+            ref
+                .read(alarmServiceProvider)
+                .syncAlarmsForSession(session, config: config);
           }
 
           return Stack(
@@ -75,13 +89,16 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                 children: [
                   // Thông báo lỗi / thành công từ ViewModel
                   if (sessionState.actionError != null)
-                    _buildMessageBanner(sessionState.actionError!, isError: true),
+                    _buildMessageBanner(sessionState.actionError!,
+                        isError: true),
                   if (sessionState.actionSuccess != null)
-                    _buildMessageBanner(sessionState.actionSuccess!, isError: false),
+                    _buildMessageBanner(sessionState.actionSuccess!,
+                        isError: false),
 
                   // 1. Thẻ thông tin phiên bàn & Đồng hồ đếm ngược
                   Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                     elevation: 1,
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -104,7 +121,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                                   const SizedBox(height: 2),
                                   Text(
                                     'Bắt đầu: ${DateFormat('HH:mm').format(session.startedAt)}',
-                                    style: const TextStyle(color: Colors.black54, fontSize: 13),
+                                    style: const TextStyle(
+                                        color: Colors.black54, fontSize: 13),
                                   ),
                                 ],
                               ),
@@ -113,18 +131,43 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                           ),
                           const Divider(height: 28),
                           if (!session.isActive)
-                            const Text('Phiên bàn đã kết thúc', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold))
-                          else CountdownTimerWidget(
-                            expiresAt: session.expiresAt,
-                            fontSize: 34,
-                            warningMinutes: config.warnMinutes.isNotEmpty
-                                ? config.warnMinutes.first
-                                : 15,
-                            extendStepMinutes: config.extendStepMinutes,
-                            onExtend: session.isActive
-                                ? () => vm.extendSession(session.id, uid)
-                                : null,
-                          ),
+                            const Text('Phiên bàn đã kết thúc',
+                                style: TextStyle(
+                                    fontSize: 22, fontWeight: FontWeight.bold))
+                          else
+                            CountdownTimerWidget(
+                              expiresAt: session.expiresAt,
+                              fontSize: 34,
+                              warningMinutes: config.warnMinutes.isNotEmpty
+                                  ? config.warnMinutes.first
+                                  : 15,
+                              extendStepMinutes: config.extendStepMinutes,
+                              onExtend: canRequestExtension
+                                  ? () => vm.requestSessionExtension(
+                                      session.id, uid)
+                                  : null,
+                            ),
+                          if (extensionRequestPending)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Đang chờ nhân viên duyệt yêu cầu gia hạn.',
+                                style: TextStyle(
+                                  color: Color(0xFFE65100),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          if (extensionRequestAsync.hasError)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Không kiểm tra được trạng thái yêu cầu gia hạn.',
+                                style: TextStyle(color: Colors.red),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           const SizedBox(height: 12),
                           Text(
                             'Tạm tính hiện tại: ${_formatter.format(session.subtotal)} đ',
@@ -147,11 +190,14 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                       Expanded(
                         child: _ActionTile(
                           icon: Icons.more_time,
-                          label: 'Gia hạn (+30\')',
+                          label: extensionRequestPending
+                              ? 'Chờ duyệt gia hạn'
+                              : 'Xin gia hạn (+30\')',
                           color: const Color(0xFFE65100),
                           isLoading: sessionState.isActionLoading,
-                          onTap: session.isActive
-                              ? () => vm.extendSession(session.id, uid)
+                          onTap: canRequestExtension
+                              ? () =>
+                                  vm.requestSessionExtension(session.id, uid)
                               : null,
                         ),
                       ),
@@ -163,7 +209,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                           color: const Color(0xFF2E7D32),
                           isLoading: sessionState.isActionLoading,
                           onTap: session.isActive
-                              ? () => _confirmEarlyRelease(context, vm, session.id, uid)
+                              ? () => _confirmEarlyRelease(
+                                  context, vm, session.id, uid)
                               : null,
                         ),
                       ),
@@ -228,47 +275,72 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.shopping_cart, color: Color(0xFFE65100), size: 20),
+                                    const Icon(Icons.shopping_cart,
+                                        color: Color(0xFFE65100), size: 20),
                                     const SizedBox(width: 8),
                                     Text(
                                       'Món đang chọn (${sessionState.draftCart.length})',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15),
                                     ),
                                   ],
                                 ),
                                 TextButton(
                                   onPressed: vm.clearDraftCart,
-                                  child: const Text('Xóa hết', style: TextStyle(color: Colors.red, fontSize: 12)),
+                                  child: const Text('Xóa hết',
+                                      style: TextStyle(
+                                          color: Colors.red, fontSize: 12)),
                                 ),
                               ],
                             ),
                             const Divider(),
-                            ...sessionState.draftCart.asMap().entries.map((entry) {
+                            ...sessionState.draftCart
+                                .asMap()
+                                .entries
+                                .map((entry) {
                               final idx = entry.key;
                               final item = entry.value;
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
                                 child: Row(
                                   children: [
-                                    Text('${item.qty}x', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text('${item.qty}x',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                          Text(item.name,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w600)),
                                           if (item.selectedOptions.isNotEmpty)
                                             Text(
-                                              item.selectedOptions.map((o) => o.choiceName).join(', '),
-                                              style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                              item.selectedOptions
+                                                  .map((o) => o.choiceName)
+                                                  .join(', '),
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.black54),
                                             ),
                                         ],
                                       ),
                                     ),
-                                    Text('${_formatter.format(item.totalPrice)} đ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text(
+                                        '${_formatter.format(item.totalPrice)} đ',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.red),
-                                      onPressed: () => vm.removeFromDraftCart(idx),
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          size: 18,
+                                          color: Colors.red),
+                                      onPressed: () =>
+                                          vm.removeFromDraftCart(idx),
                                     ),
                                   ],
                                 ),
@@ -285,11 +357,14 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                                         uid: uid,
                                       ),
                               icon: const Icon(Icons.send),
-                              label: Text('Gửi đơn gọi món · ${_formatter.format(sessionState.draftCartTotal)} đ'),
+                              label: Text(
+                                  'Gửi đơn gọi món · ${_formatter.format(sessionState.draftCartTotal)} đ'),
                               style: FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFF5D4037),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
                               ),
                             ),
                           ],
@@ -305,11 +380,15 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                     children: [
                       const Text(
                         'Các đơn đã gửi của bàn',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF3E2723)),
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF3E2723)),
                       ),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Gọi thêm món', style: TextStyle(fontSize: 12)),
+                        label: const Text('Gọi thêm món',
+                            style: TextStyle(fontSize: 12)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF5D4037),
                           side: const BorderSide(color: Color(0xFFBCAAA4)),
@@ -343,55 +422,90 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                         itemBuilder: (context, idx) {
                           final order = orders[idx];
                           return Card(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
                             child: Padding(
                               padding: const EdgeInsets.all(14),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         'Đơn #${order.id.length > 6 ? order.id.substring(order.id.length - 6) : order.id}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14),
                                       ),
                                       _buildOrderStatusBadge(order.status),
                                     ],
                                   ),
                                   const Divider(height: 16),
                                   ...order.items.map((i) => Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 2),
                                         child: Row(
                                           children: [
-                                            Text('${i.qty}x ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            Text('${i.qty}x ',
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold)),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
-                                                  Text(i.name, style: const TextStyle(fontSize: 13)),
-                                                  if (i.selectedOptions.isNotEmpty)
+                                                  Text(i.name,
+                                                      style: const TextStyle(
+                                                          fontSize: 13)),
+                                                  if (i.selectedOptions
+                                                      .isNotEmpty)
                                                     Text(
-                                                      i.selectedOptions.map((o) => o.choiceName).join(', '),
-                                                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                                      i.selectedOptions
+                                                          .map((o) =>
+                                                              o.choiceName)
+                                                          .join(', '),
+                                                      style: const TextStyle(
+                                                          fontSize: 11,
+                                                          color:
+                                                              Colors.black54),
                                                     ),
-                                                  if (i.note != null && i.note!.isNotEmpty)
-                                                    Text('Ghi chú: ${i.note}', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.black45)),
+                                                  if (i.note != null &&
+                                                      i.note!.isNotEmpty)
+                                                    Text('Ghi chú: ${i.note}',
+                                                        style: const TextStyle(
+                                                            fontSize: 11,
+                                                            fontStyle: FontStyle
+                                                                .italic,
+                                                            color: Colors
+                                                                .black45)),
                                                 ],
                                               ),
                                             ),
-                                            Text('${_formatter.format(i.totalPrice)} đ', style: const TextStyle(fontSize: 13)),
+                                            Text(
+                                                '${_formatter.format(i.totalPrice)} đ',
+                                                style: const TextStyle(
+                                                    fontSize: 13)),
                                           ],
                                         ),
                                       )),
                                   const Divider(height: 16),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Text('Tổng tiền đơn:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                      const Text('Tổng tiền đơn:',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13)),
                                       Text(
                                         '${_formatter.format(order.total)} đ',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF5D4037)),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: Color(0xFF5D4037)),
                                       ),
                                     ],
                                   ),
@@ -402,7 +516,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                         },
                       );
                     },
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Text('Lỗi tải đơn hàng: $e'),
                   ),
                 ],
@@ -446,7 +561,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+        style:
+            TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
       ),
     );
   }
@@ -493,7 +609,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+        style:
+            TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
       ),
     );
   }
@@ -520,7 +637,9 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
               margin: const EdgeInsets.symmetric(vertical: 10),
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(2)),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -544,10 +663,15 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                     itemBuilder: (context, idx) {
                       final item = available[idx];
                       return ListTile(
-                        leading: const Icon(Icons.coffee, color: Color(0xFF5D4037)),
-                        title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${_formatter.format(item.price)} đ · ${item.category}'),
-                        trailing: const Icon(Icons.add_circle, color: Color(0xFF5D4037)),
+                        leading:
+                            const Icon(Icons.coffee, color: Color(0xFF5D4037)),
+                        title: Text(item.name,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                            '${_formatter.format(item.price)} đ · ${item.category}'),
+                        trailing: const Icon(Icons.add_circle,
+                            color: Color(0xFF5D4037)),
                         onTap: () {
                           Navigator.of(ctx).pop();
                           showDialog<void>(
@@ -593,7 +717,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
             child: const Text('Hủy'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32)),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Xác nhận trả sớm'),
           ),

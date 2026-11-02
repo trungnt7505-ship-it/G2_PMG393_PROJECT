@@ -3,6 +3,7 @@ import '../constants/enums.dart';
 import '../models/menu_item_model.dart';
 import '../models/order_model.dart';
 import 'clock_service.dart';
+import 'config_service.dart';
 
 /// Dịch vụ quản lý đơn gọi món, hàng đợi pha chế và trạng thái phục vụ.
 class OrderService {
@@ -26,9 +27,18 @@ class OrderService {
     required String createdBy,
     required String createdByRole,
     OrderType type = OrderType.dine_in,
+    DateTime? pickupAt,
+    String? customerName,
+    String? customerPhone,
   }) async {
     if (items.isEmpty) {
       throw Exception('Đơn hàng không có món nào.');
+    }
+    if (type == OrderType.takeaway && sessionId != 'takeaway_orders') {
+      throw ArgumentError('Đơn mang đi phải dùng hàng đợi mang đi.');
+    }
+    if (sessionId == 'takeaway_orders' && type != OrderType.takeaway) {
+      throw ArgumentError('Hàng đợi mang đi chỉ nhận đơn mang đi.');
     }
 
     final now = ClockService.instance.serverNow;
@@ -72,6 +82,9 @@ class OrderService {
         sessionId: sessionId,
         tableId: tableId,
         tableName: tableName,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        pickupAt: pickupAt,
         items: validatedItems,
         createdBy: createdBy,
         createdByRole: createdByRole,
@@ -95,6 +108,22 @@ class OrderService {
               (isStaff ? calculatedTotal : 0),
           'orderRevision': FieldValue.increment(1),
         });
+      } else if (createdByRole == 'customer') {
+        if (pickupAt == null) {
+          throw ArgumentError('Đơn mang đi cần có thời gian nhận hàng.');
+        }
+        if (!pickupAt.isAfter(now)) {
+          throw ArgumentError('Thời gian nhận hàng phải ở trong tương lai.');
+        }
+        final config = await ConfigService(firestore: _firestore)
+            .read(transaction: transaction);
+        final latestPickupAt = now.add(Duration(days: config.maxAdvanceDays));
+        if (pickupAt.isAfter(latestPickupAt)) {
+          throw ArgumentError(
+            'Thời gian nhận hàng không được vượt quá '
+            '${config.maxAdvanceDays} ngày.',
+          );
+        }
       }
       transaction.set(orderRef, order.toMap());
 

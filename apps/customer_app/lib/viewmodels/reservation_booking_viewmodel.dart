@@ -50,19 +50,23 @@ class ReservationBookingState {
       startTime: startTime ?? this.startTime,
       partySize: partySize ?? this.partySize,
       availableTables: availableTables ?? this.availableTables,
-      selectedTable: clearSelectedTable ? null : (selectedTable ?? this.selectedTable),
+      selectedTable:
+          clearSelectedTable ? null : (selectedTable ?? this.selectedTable),
       preOrderItems: preOrderItems ?? this.preOrderItems,
       isSearchingTables: isSearchingTables ?? this.isSearchingTables,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      createdReservationId: clearSuccess ? null : (createdReservationId ?? this.createdReservationId),
+      createdReservationId: clearSuccess
+          ? null
+          : (createdReservationId ?? this.createdReservationId),
     );
   }
 }
 
 /// ViewModel quản lý toàn bộ nghiệp vụ chọn giờ, tìm bàn, đặt món trước (pre-order)
 /// và xác nhận đặt bàn thông qua [ReservationService].
-class ReservationBookingViewModel extends StateNotifier<ReservationBookingState> {
+class ReservationBookingViewModel
+    extends StateNotifier<ReservationBookingState> {
   final ReservationService _reservationService;
 
   ReservationBookingViewModel({required ReservationService reservationService})
@@ -126,10 +130,16 @@ class ReservationBookingViewModel extends StateNotifier<ReservationBookingState>
     state = state.copyWith(preOrderItems: updated);
   }
 
+  /// Nạp giỏ món từ thực đơn trang chủ vào quy trình đặt bàn.
+  void setPreOrderItems(List<OrderItemModel> items) {
+    state = state.copyWith(preOrderItems: List<OrderItemModel>.from(items));
+  }
+
   /// Xóa món khỏi danh sách đặt trước theo vị trí index.
   void removePreOrderItem(int index) {
     if (index < 0 || index >= state.preOrderItems.length) return;
-    final updated = List<OrderItemModel>.from(state.preOrderItems)..removeAt(index);
+    final updated = List<OrderItemModel>.from(state.preOrderItems)
+      ..removeAt(index);
     state = state.copyWith(preOrderItems: updated);
   }
 
@@ -156,7 +166,8 @@ class ReservationBookingViewModel extends StateNotifier<ReservationBookingState>
     required AppConfig config,
   }) async {
     if (state.selectedTable == null) {
-      state = state.copyWith(errorMessage: 'Vui lòng chọn bàn trước khi xác nhận.');
+      state =
+          state.copyWith(errorMessage: 'Vui lòng chọn bàn trước khi xác nhận.');
       return null;
     }
 
@@ -166,14 +177,16 @@ class ReservationBookingViewModel extends StateNotifier<ReservationBookingState>
       final draft = ReservationModel(
         id: '',
         customerId: user.id,
-        customerName: user.displayName.isNotEmpty ? user.displayName : 'Khách hàng',
+        customerName:
+            user.displayName.isNotEmpty ? user.displayName : 'Khách hàng',
         phone: user.phone,
         tableId: state.selectedTable!.id,
         tableName: state.selectedTable!.name,
         partySize: state.partySize,
         startTime: state.startTime,
         endTime: state.startTime.add(Duration(minutes: config.sessionMinutes)),
-        holdUntil: state.startTime.add(Duration(minutes: config.reservationHoldMinutes)),
+        holdUntil: state.startTime
+            .add(Duration(minutes: config.reservationHoldMinutes)),
         status: 'confirmed',
         preOrderItems: state.preOrderItems,
         createdAt: DateTime.now(),
@@ -188,9 +201,14 @@ class ReservationBookingViewModel extends StateNotifier<ReservationBookingState>
       );
       return resId;
     } catch (e) {
-      final msg = e is StateError ? e.message.toString() : e.toString().contains('TimeoutException')
-          ? 'Hết thời gian chờ kết nối máy chủ. Vui lòng kiểm tra lại mạng.'
-          : e.toString().replaceAll('Exception: ', '').replaceAll('StateError: ', '');
+      final msg = e is StateError
+          ? e.message.toString()
+          : e.toString().contains('TimeoutException')
+              ? 'Hết thời gian chờ kết nối máy chủ. Vui lòng kiểm tra lại mạng.'
+              : e
+                  .toString()
+                  .replaceAll('Exception: ', '')
+                  .replaceAll('StateError: ', '');
       state = state.copyWith(
         isSubmitting: false,
         errorMessage: 'Đặt bàn không thành công: $msg',
@@ -208,8 +226,8 @@ class ReservationBookingViewModel extends StateNotifier<ReservationBookingState>
 }
 
 /// Provider cho ReservationBookingViewModel.
-final reservationBookingViewModelProvider =
-    StateNotifierProvider.autoDispose<ReservationBookingViewModel, ReservationBookingState>((ref) {
+final reservationBookingViewModelProvider = StateNotifierProvider.autoDispose<
+    ReservationBookingViewModel, ReservationBookingState>((ref) {
   return ReservationBookingViewModel(
     reservationService: ref.watch(reservationServiceProvider),
   );

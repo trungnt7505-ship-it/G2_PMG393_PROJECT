@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core/core.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -199,6 +200,91 @@ void main() {
         payments.payTakeaway(
             orderId: 'order', cashierId: 'cashier', method: PaymentMethod.cash),
         throwsStateError);
+  });
+
+  test('Customer takeaway order persists pickup details for staff', () async {
+    await seed();
+    await db
+        .doc('menuItems/coffee')
+        .set({'name': 'Cà phê', 'price': 100000, 'available': true});
+    final pickupAt =
+        ClockService.instance.serverNow.add(const Duration(hours: 1));
+
+    final orderId = await orders.submitOrder(
+      sessionId: 'takeaway_orders',
+      tableId: 'takeaway',
+      tableName: 'Đơn mang đi',
+      items: const [item],
+      createdBy: 'customer',
+      createdByRole: 'customer',
+      type: OrderType.takeaway,
+      pickupAt: pickupAt,
+      customerName: 'Khách',
+      customerPhone: '090',
+    );
+
+    final stored =
+        (await db.doc('sessions/takeaway_orders/orders/$orderId').get())
+            .data()!;
+    expect(stored['status'], 'pending');
+    expect(stored['pickupAt'], isA<Timestamp>());
+    expect((stored['pickupAt'] as Timestamp).toDate(), pickupAt);
+    expect(stored['customerName'], 'Khách');
+    expect(stored['customerPhone'], '090');
+  });
+
+  test('Customer takeaway order requires a valid pickup time and queue',
+      () async {
+    await seed();
+    await db
+        .doc('menuItems/coffee')
+        .set({'name': 'Cà phê', 'price': 100000, 'available': true});
+    final pickupAt =
+        ClockService.instance.serverNow.add(const Duration(hours: 1));
+
+    Future<String> submit({
+      required String sessionId,
+      DateTime? scheduledAt,
+    }) {
+      return orders.submitOrder(
+        sessionId: sessionId,
+        tableId: sessionId == 'takeaway_orders' ? 'takeaway' : 'table',
+        tableName: 'Đơn',
+        items: const [item],
+        createdBy: 'customer',
+        createdByRole: 'customer',
+        type: OrderType.takeaway,
+        pickupAt: scheduledAt,
+      );
+    }
+
+    await expectLater(
+      submit(sessionId: 'takeaway_orders'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      submit(
+        sessionId: 'takeaway_orders',
+        scheduledAt: ClockService.instance.serverNow,
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      submit(
+        sessionId: 'takeaway_orders',
+        scheduledAt: ClockService.instance.serverNow
+            .add(Duration(days: AppConfig.defaultConfig.maxAdvanceDays + 1)),
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      submit(sessionId: 'session', scheduledAt: pickupAt),
+      throwsArgumentError,
+    );
+    expect(
+      (await db.collection('sessions/takeaway_orders/orders').get()).docs,
+      isEmpty,
+    );
   });
 
   test(

@@ -75,6 +75,26 @@ class TaskHubViewModel extends StateNotifier<AsyncValue<void>> {
       return false;
     }
   }
+
+  /// Duyệt yêu cầu gia hạn và cộng thời gian trong cùng transaction.
+  Future<int?> approveExtensionRequest(
+    String requestId, {
+    required String byUid,
+  }) async {
+    if (state.isLoading) return null;
+    state = const AsyncValue.loading();
+    try {
+      final addedMinutes = await _sessionService.approveSessionExtension(
+        requestId,
+        byUid: byUid,
+      );
+      state = const AsyncValue.data(null);
+      return addedMinutes;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return null;
+    }
+  }
 }
 
 /// Provider cho [TaskHubViewModel].

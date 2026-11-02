@@ -149,6 +149,15 @@ class OrderModel {
   /// Tên bàn hiển thị.
   final String tableName;
 
+  /// Tên khách nhận đơn mang đi.
+  final String? customerName;
+
+  /// Số điện thoại liên hệ của khách nhận đơn mang đi.
+  final String? customerPhone;
+
+  /// Thời gian khách hẹn đến nhận đơn mang đi.
+  final DateTime? pickupAt;
+
   /// Danh sách các món trong đơn này.
   final List<OrderItemModel> items;
 
@@ -182,6 +191,9 @@ class OrderModel {
     required this.sessionId,
     required this.tableId,
     required this.tableName,
+    this.customerName,
+    this.customerPhone,
+    this.pickupAt,
     required this.items,
     required this.createdBy,
     required this.createdByRole,
@@ -206,6 +218,10 @@ class OrderModel {
       sessionId: map['sessionId'] as String? ?? '',
       tableId: map['tableId'] as String? ?? '',
       tableName: map['tableName'] as String? ?? '',
+      customerName: map['customerName'] as String?,
+      customerPhone: map['customerPhone'] as String?,
+      pickupAt:
+          map['pickupAt'] == null ? null : _parseDateTime(map['pickupAt']),
       items: (map['items'] as List<dynamic>?)
               ?.map((e) =>
                   OrderItemModel.fromMap(Map<String, dynamic>.from(e as Map)))
@@ -228,6 +244,9 @@ class OrderModel {
       'sessionId': sessionId,
       'tableId': tableId,
       'tableName': tableName,
+      if (customerName != null) 'customerName': customerName,
+      if (customerPhone != null) 'customerPhone': customerPhone,
+      if (pickupAt != null) 'pickupAt': Timestamp.fromDate(pickupAt!),
       'items': items.map((e) => e.toMap()).toList(),
       'createdBy': createdBy,
       'createdByRole': createdByRole,
@@ -246,6 +265,9 @@ class OrderModel {
     String? sessionId,
     String? tableId,
     String? tableName,
+    String? customerName,
+    String? customerPhone,
+    DateTime? pickupAt,
     List<OrderItemModel>? items,
     String? createdBy,
     String? createdByRole,
@@ -262,6 +284,9 @@ class OrderModel {
       sessionId: sessionId ?? this.sessionId,
       tableId: tableId ?? this.tableId,
       tableName: tableName ?? this.tableName,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      pickupAt: pickupAt ?? this.pickupAt,
       items: items ?? this.items,
       createdBy: createdBy ?? this.createdBy,
       createdByRole: createdByRole ?? this.createdByRole,

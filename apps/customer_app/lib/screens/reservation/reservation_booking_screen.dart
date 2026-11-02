@@ -17,7 +17,14 @@ import 'my_reservations_screen.dart';
 /// 3. Chọn các món đặt trước (Pre-order items) kèm tùy chọn (options) và ghi chú để nhận điểm thưởng `preOrderBonusPoints`.
 /// 4. Tạo đơn đặt và hiển thị mã QR `cafe://preorder/{resId}` trực quan.
 class ReservationBookingScreen extends ConsumerStatefulWidget {
-  const ReservationBookingScreen({super.key});
+  final List<OrderItemModel> initialPreOrderItems;
+  final VoidCallback? onReservationCreated;
+
+  const ReservationBookingScreen({
+    super.key,
+    this.initialPreOrderItems = const [],
+    this.onReservationCreated,
+  });
 
   @override
   ConsumerState<ReservationBookingScreen> createState() =>
@@ -29,10 +36,24 @@ class _ReservationBookingScreenState
   final _formatter = NumberFormat('#,###', 'vi_VN');
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.initialPreOrderItems.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref
+            .read(reservationBookingViewModelProvider.notifier)
+            .setPreOrderItems(widget.initialPreOrderItems);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = ref.watch(reservationBookingViewModelProvider);
     final vm = ref.read(reservationBookingViewModelProvider.notifier);
-    final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
+    final config =
+        ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final user = ref.watch(currentUserProvider).value;
     final menuAsync = ref.watch(menuItemsProvider);
 
@@ -47,7 +68,8 @@ class _ReservationBookingScreenState
           _buildStepHeader(1, 'Thời gian & Số lượng khách'),
           const SizedBox(height: 10),
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -58,10 +80,12 @@ class _ReservationBookingScreenState
                     title: const Text('Thời gian bắt đầu'),
                     subtitle: Text(
                       DateFormat('dd/MM/yyyy · HH:mm').format(state.startTime),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     trailing: const Icon(Icons.edit_calendar),
-                    onTap: () => _pickDateTime(context, config, state.startTime, vm),
+                    onTap: () =>
+                        _pickDateTime(context, config, state.startTime, vm),
                   ),
                   const Divider(height: 20),
                   Row(
@@ -71,7 +95,8 @@ class _ReservationBookingScreenState
                         children: [
                           Icon(Icons.people_outline, color: Color(0xFF5D4037)),
                           SizedBox(width: 12),
-                          Text('Số lượng khách', style: TextStyle(fontSize: 15)),
+                          Text('Số lượng khách',
+                              style: TextStyle(fontSize: 15)),
                         ],
                       ),
                       DropdownButton<int>(
@@ -81,7 +106,9 @@ class _ReservationBookingScreenState
                           12,
                           (i) => DropdownMenuItem(
                             value: i + 1,
-                            child: Text('${i + 1} khách', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            child: Text('${i + 1} khách',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
                           ),
                         ),
                         onChanged: (val) {
@@ -92,18 +119,21 @@ class _ReservationBookingScreenState
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
-                    onPressed: state.isSearchingTables ? null : vm.findAvailableTables,
+                    onPressed:
+                        state.isSearchingTables ? null : vm.findAvailableTables,
                     icon: state.isSearchingTables
                         ? const SizedBox.square(
                             dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.search),
                     label: const Text('Kiểm tra bàn trống'),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF5D4037),
                       minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ],
@@ -118,7 +148,8 @@ class _ReservationBookingScreenState
           const SizedBox(height: 10),
           if (state.availableTables.isNotEmpty)
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -136,8 +167,12 @@ class _ReservationBookingScreenState
                           selected: isSelected,
                           selectedColor: const Color(0xFFD7CCC8),
                           labelStyle: TextStyle(
-                            color: isSelected ? const Color(0xFF3E2723) : Colors.black87,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected
+                                ? const Color(0xFF3E2723)
+                                : Colors.black87,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                           onSelected: (_) => vm.selectTable(table),
                         );
@@ -157,10 +192,13 @@ class _ReservationBookingScreenState
               ),
               child: Center(
                 child: Text(
-                  state.errorMessage ?? 'Vui lòng bấm "Kiểm tra bàn trống" để xem danh sách bàn khả dụng.',
+                  state.errorMessage ??
+                      'Vui lòng bấm "Kiểm tra bàn trống" để xem danh sách bàn khả dụng.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: state.errorMessage != null ? Colors.red : Colors.black54,
+                    color: state.errorMessage != null
+                        ? Colors.red
+                        : Colors.black54,
                     fontSize: 13,
                   ),
                 ),
@@ -201,7 +239,8 @@ class _ReservationBookingScreenState
           // Giỏ món đặt trước hiện tại
           if (state.preOrderItems.isNotEmpty)
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
@@ -210,7 +249,8 @@ class _ReservationBookingScreenState
                       final idx = entry.key;
                       final item = entry.value;
                       final optionsDesc = item.selectedOptions
-                          .map((o) => '${o.choiceName}${o.extraPrice > 0 ? " (+${_formatter.format(o.extraPrice)}đ)" : ""}')
+                          .map((o) =>
+                              '${o.choiceName}${o.extraPrice > 0 ? " (+${_formatter.format(o.extraPrice)}đ)" : ""}')
                           .join(', ');
 
                       return Padding(
@@ -220,27 +260,41 @@ class _ReservationBookingScreenState
                           children: [
                             Text(
                               '${item.qty}x',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF5D4037)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF5D4037)),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(item.name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
                                   if (optionsDesc.isNotEmpty)
-                                    Text(optionsDesc, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                                  if (item.note != null && item.note!.isNotEmpty)
-                                    Text('Ghi chú: ${item.note}', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.black54)),
+                                    Text(optionsDesc,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.black54)),
+                                  if (item.note != null &&
+                                      item.note!.isNotEmpty)
+                                    Text('Ghi chú: ${item.note}',
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            fontStyle: FontStyle.italic,
+                                            color: Colors.black54)),
                                 ],
                               ),
                             ),
                             Text(
                               '${_formatter.format(item.totalPrice)} đ',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, size: 20, color: Colors.red),
+                              icon: const Icon(Icons.remove_circle_outline,
+                                  size: 20, color: Colors.red),
                               onPressed: () => vm.removePreOrderItem(idx),
                             ),
                           ],
@@ -251,7 +305,8 @@ class _ReservationBookingScreenState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Tạm tính món đặt trước:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('Tạm tính món đặt trước:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                         Text(
                           '${_formatter.format(state.preOrderTotal)} đ',
                           style: const TextStyle(
@@ -275,7 +330,8 @@ class _ReservationBookingScreenState
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF5D4037),
               side: const BorderSide(color: Color(0xFFBCAAA4)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
 
@@ -297,7 +353,10 @@ class _ReservationBookingScreenState
                   Expanded(
                     child: Text(
                       state.errorMessage!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
@@ -308,13 +367,18 @@ class _ReservationBookingScreenState
 
           // Nút xác nhận đặt bàn
           FilledButton(
-            onPressed: state.isSubmitting || state.selectedTable == null || user == null
+            onPressed: state.isSubmitting ||
+                    state.selectedTable == null ||
+                    user == null
                 ? null
                 : () async {
-                    final resId = await vm.submitReservation(user: user, config: config);
+                    final resId =
+                        await vm.submitReservation(user: user, config: config);
                     if (!context.mounted) return;
                     if (resId != null) {
-                      _showSuccessDialog(context, resId, state.selectedTable!.name, state.startTime);
+                      widget.onReservationCreated?.call();
+                      _showSuccessDialog(context, resId,
+                          state.selectedTable!.name, state.startTime);
                     } else if (state.errorMessage != null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -328,12 +392,14 @@ class _ReservationBookingScreenState
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF5D4037),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
             child: state.isSubmitting
                 ? const SizedBox.square(
                     dimension: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
                 : const Text(
                     'Xác nhận đặt bàn',
@@ -359,13 +425,17 @@ class _ReservationBookingScreenState
           ),
           child: Text(
             '$step',
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
           ),
         ),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF3E2723)),
+          style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Color(0xFF3E2723)),
         ),
       ],
     );
@@ -429,7 +499,9 @@ class _ReservationBookingScreenState
               margin: const EdgeInsets.symmetric(vertical: 10),
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(2)),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -444,7 +516,8 @@ class _ReservationBookingScreenState
                 data: (items) {
                   final available = items.where((i) => i.available).toList();
                   if (available.isEmpty) {
-                    return const Center(child: Text('Hiện không có món nào khả dụng.'));
+                    return const Center(
+                        child: Text('Hiện không có món nào khả dụng.'));
                   }
                   return ListView.separated(
                     controller: scrollController,
@@ -453,10 +526,15 @@ class _ReservationBookingScreenState
                     itemBuilder: (context, idx) {
                       final item = available[idx];
                       return ListTile(
-                        leading: const Icon(Icons.coffee, color: Color(0xFF5D4037)),
-                        title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${_formatter.format(item.price)} đ · ${item.category}'),
-                        trailing: const Icon(Icons.add_circle, color: Color(0xFF5D4037)),
+                        leading:
+                            const Icon(Icons.coffee, color: Color(0xFF5D4037)),
+                        title: Text(item.name,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                            '${_formatter.format(item.price)} đ · ${item.category}'),
+                        trailing: const Icon(Icons.add_circle,
+                            color: Color(0xFF5D4037)),
                         onTap: () {
                           Navigator.of(ctx).pop();
                           showDialog<void>(
@@ -506,7 +584,8 @@ class _ReservationBookingScreenState
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Bàn: $tableName · ${DateFormat('dd/MM HH:mm').format(startTime)}'),
+            Text(
+                'Bàn: $tableName · ${DateFormat('dd/MM HH:mm').format(startTime)}'),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
@@ -527,7 +606,8 @@ class _ReservationBookingScreenState
             const SizedBox(height: 12),
             Text(
               qrPayload,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.black54),
+              style: const TextStyle(
+                  fontFamily: 'monospace', fontSize: 12, color: Colors.black54),
             ),
             const SizedBox(height: 8),
             TextButton.icon(
@@ -551,7 +631,8 @@ class _ReservationBookingScreenState
             child: const Text('Đóng'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5D4037)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF5D4037)),
             onPressed: () {
               Navigator.of(ctx).pop();
               Navigator.of(context).pushReplacement(
