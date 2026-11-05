@@ -15,6 +15,7 @@ import '../reservation/reservation_booking_screen.dart';
 import '../reservation/my_reservations_screen.dart';
 import '../scanner/table_qr_scanner_screen.dart';
 import '../history/points_and_history_screen.dart';
+import '../../dialogs/edit_contact_dialog.dart';
 
 /// Màn hình chính của Khách hàng (CustomerHomeScreen).
 ///
@@ -66,6 +67,19 @@ class CustomerHomeScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Thông tin cá nhân',
+            icon: const Icon(Icons.person_outline),
+            onPressed: user == null ? null : () async {
+              final saved = await showDialog<bool>(context: context,
+                barrierDismissible: false,
+                builder: (_) => EditContactDialog(customer: user));
+              if (saved == true && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đã cập nhật tên và số điện thoại')));
+              }
+            },
+          ),
           IconButton(
             tooltip: 'Lịch sử tích điểm & hóa đơn',
             icon: const Icon(Icons.receipt_long),

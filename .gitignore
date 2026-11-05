@@ -68,3 +68,7 @@ disk-audit-*/
 **/ios/**/Pods.xcodeproj/
 **/ios/**/xcuserdata/
 
+
+# Office temporary lock files
+~$*
+.~$*

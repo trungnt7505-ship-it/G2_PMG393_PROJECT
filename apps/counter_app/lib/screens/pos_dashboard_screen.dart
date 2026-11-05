@@ -9,6 +9,7 @@ import '../viewmodels/pos_dashboard_viewmodel.dart';
 import '../widgets/order_detail_panel.dart';
 import '../widgets/order_queue_panel.dart';
 import '../widgets/table_map_panel.dart';
+import 'revenue_report_screen.dart';
 
 /// Màn hình chính POS Dashboard được chia làm 3 cột dành cho Tablet / Desktop ngang:
 /// - Cột 1 (Flex 3): Sơ đồ bàn tổng quan, màu sắc theo TableDisplayStatus, đồng hồ đếm ngược.
@@ -100,6 +101,12 @@ class _PosDashboardScreenState extends ConsumerState<PosDashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Doanh thu',
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const RevenueReportScreen())),
+          ),
           // Nút Quét mã QR Đa Năng
           TextButton.icon(
             onPressed: () {

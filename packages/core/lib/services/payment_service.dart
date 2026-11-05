@@ -370,6 +370,20 @@ class PaymentService {
   }
 
   /// Lắng nghe các hóa đơn thanh toán phát sinh trong ngày hôm nay.
+  Stream<List<PaymentModel>> watchPaymentsBetween(DateTime start, DateTime end) {
+    if (!end.isAfter(start)) {
+      throw ArgumentError('Thời điểm kết thúc phải sau thời điểm bắt đầu.');
+    }
+    return _firestore.collection('payments')
+        .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('paidAt', isLessThan: Timestamp.fromDate(end))
+        .orderBy('paidAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => PaymentModel.fromMap(doc.data(), doc.id)).toList());
+  }
+
+  /// Lắng nghe các hóa đơn thanh toán phát sinh trong ngày hôm nay.
   Stream<List<PaymentModel>> watchTodayPayments() {
     final now = ClockService.instance.serverNow;
     final startOfDay = DateTime(now.year, now.month, now.day);
