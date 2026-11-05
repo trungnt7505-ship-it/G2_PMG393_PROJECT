@@ -30,6 +30,9 @@ class OrderQueuePanel extends ConsumerWidget {
     );
 
     final dashboardState = ref.watch(posDashboardViewModelProvider);
+    final billingSessions = ref.watch(activeSessionsProvider);
+    final billRequests = ref.watch(openRequestsProvider);
+    final requestedBills = billRequests.valueOrNull?.where((r) => r.type == 'request_bill').map((r) => r.sessionId).toSet() ?? <String>{};
 
     return Container(
       decoration: BoxDecoration(
@@ -112,6 +115,22 @@ class OrderQueuePanel extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           const Divider(height: 1),
+          if (dashboardState.orderFilter == 'Chờ thanh toán')
+            Flexible(child: billingSessions.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (e,_) => Text('Không tải được bàn chờ thanh toán: $e'),
+              data: (sessions) => ListView(shrinkWrap: true, children: sessions.where((s) => s.status == 'billing' || requestedBills.contains(s.id)).map((s) => Card(child: ListTile(
+                title: Text('${s.tableName} · ${s.customerName}'), subtitle: Text('Chờ thanh toán · ${currencyFmt.format(s.subtotal)} đ'),
+                trailing: FilledButton(onPressed: () async {
+                  try {
+                    final orders = await ref.read(sessionOrdersProvider(s.id).future);
+                    if (orders.any((o) => o.status == 'pending')) throw StateError('Còn món chờ duyệt. Vui lòng xử lý trước khi thu tiền.');
+                    if (!context.mounted) return;
+                    showDialog<void>(context: context, builder: (_) => PaymentCheckoutModal(session: s, items: orders.where((o) => o.status != 'cancelled').expand((o) => o.items).toList()));
+                  } catch(e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
+                }, child: const Text('Thu tiền')),
+              ))).toList()),
+            )),
 
           // Danh sách đơn hàng
           Expanded(
@@ -147,8 +166,8 @@ class OrderQueuePanel extends ConsumerWidget {
                 }).toList();
 
                 if (filteredOrders.isEmpty) {
-                  return const Center(
-                    child: Text('Hàng đợi pha chế hiện đang trống.'),
+                  return Center(
+                    child: Text(dashboardState.orderFilter == 'Chờ thanh toán' ? 'Không có đơn mang đi chờ thanh toán.' : 'Hàng đợi pha chế hiện đang trống.'),
                   );
                 }
 
@@ -524,6 +543,7 @@ class OrderQueuePanel extends ConsumerWidget {
         tableName:
             'Mang đi #${order.id.substring(0, order.id.length < 6 ? order.id.length : 6)}',
         customerName: 'Khách mang đi',
+        customerId: order.createdByRole == 'customer' ? order.createdBy : null,
         openedBy: order.createdBy,
         openedByRole: order.createdByRole,
         startedAt: order.createdAt,

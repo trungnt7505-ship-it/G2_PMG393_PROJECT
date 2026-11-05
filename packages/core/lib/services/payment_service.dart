@@ -221,8 +221,9 @@ class PaymentService {
       }
       final config = await _readConfig(tx);
       _checkPreview(order.total, config, expectedSubtotal, expectedConfig);
-      final memberUid =
-          customerId == null || customerId.isEmpty ? null : customerId;
+      final memberUid = order.createdByRole == 'customer'
+          ? order.createdBy
+          : customerId == null || customerId.isEmpty ? null : customerId;
       final member = await _readMember(tx, memberUid, pointsUsed);
       final calc = calculatePayment(
           subtotal: order.total, pointsUsed: pointsUsed, config: config);
@@ -366,6 +367,20 @@ class PaymentService {
       final doc = snapshot.docs.first;
       return PaymentModel.fromMap(doc.data(), doc.id);
     });
+  }
+
+  /// Lắng nghe các hóa đơn thanh toán phát sinh trong ngày hôm nay.
+  Stream<List<PaymentModel>> watchPaymentsBetween(DateTime start, DateTime end) {
+    if (!end.isAfter(start)) {
+      throw ArgumentError('Thời điểm kết thúc phải sau thời điểm bắt đầu.');
+    }
+    return _firestore.collection('payments')
+        .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('paidAt', isLessThan: Timestamp.fromDate(end))
+        .orderBy('paidAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => PaymentModel.fromMap(doc.data(), doc.id)).toList());
   }
 
   /// Lắng nghe các hóa đơn thanh toán phát sinh trong ngày hôm nay.

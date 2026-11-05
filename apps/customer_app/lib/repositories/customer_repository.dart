@@ -30,6 +30,34 @@ class CustomerRepository {
   /// Lấy UID người dùng hiện tại từ AuthService.
   String? get currentUid => _authService.currentUid;
 
+  Future<void> updateContactInfo({
+    required String expectedUid,
+    required String displayName,
+    required String phone,
+  }) async {
+    if (currentUid == null || currentUid != expectedUid) {
+      throw StateError('Phiên đăng nhập đã thay đổi. Vui lòng mở lại hồ sơ.');
+    }
+    final name = displayName.trim();
+    final compactPhone = phone.replaceAll(RegExp(r'[\s.()-]'), '');
+    final normalizedPhone = compactPhone.startsWith('+84')
+        ? '0${compactPhone.substring(3)}' : compactPhone;
+    if (name.isEmpty || name.length > 80) {
+      throw ArgumentError('Họ tên cần từ 1 đến 80 ký tự.');
+    }
+    if (!RegExp(r'^0[0-9]{9}$').hasMatch(normalizedPhone)) {
+      throw ArgumentError('Nhập số điện thoại Việt Nam gồm 10 số hoặc bắt đầu bằng +84.');
+    }
+    final profile = _firestore.collection('users').doc(expectedUid);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(profile);
+      if (!snapshot.exists || snapshot.data()?['role'] != 'customer') {
+        throw StateError('Không tìm thấy hồ sơ khách hàng hợp lệ.');
+      }
+      tx.update(profile, {'displayName': name, 'phone': normalizedPhone});
+    });
+  }
+
   /// Stream theo dõi phiên đang hoạt động (`active` hoặc `billing`) của khách hàng hiện tại.
   /// Giúp hiển thị banner bàn đang ngồi ngay trên màn hình chính (CustomerHomeScreen).
   Stream<SessionModel?> watchActiveSessionForCustomer(String customerId) {
@@ -106,8 +134,9 @@ class CustomerRepository {
   }
 
   /// Gia hạn phiên bàn hiện tại.
-  Future<int> extendSession(String sessionId, {required String byUid}) {
-    return _sessionService.extendSession(sessionId, byUid: byUid);
+  Future<int> extendSession(String sessionId, {required String byUid}) async {
+    await _sessionService.requestExtension(sessionId, byUid);
+    return 0;
   }
 
   /// Yêu cầu xin trả bàn sớm để nhận điểm thưởng `earlyReleaseBonusPoints`.

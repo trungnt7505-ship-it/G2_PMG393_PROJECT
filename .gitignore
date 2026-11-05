@@ -40,6 +40,17 @@ migrate_working_dir/
 !apps/customer_app/android/gradlew
 !apps/customer_app/android/gradlew.bat
 !apps/customer_app/android/gradle/wrapper/gradle-wrapper.jar
+!apps/waiter_app/android/gradlew
+!apps/waiter_app/android/gradlew.bat
+!apps/waiter_app/android/gradle/wrapper/gradle-wrapper.jar
+
+# Firebase secrets - không push lên public repo
+**/google-services.json
+!apps/customer_app/android/app/google-services.json
+**/GoogleService-Info.plist
+
+# Disk audit / temp reports
+disk-audit-*/
 
 # iOS/macOS related
 **/ios/**/*.mode1v3
@@ -58,3 +69,7 @@ migrate_working_dir/
 **/ios/**/Pods.xcodeproj/
 **/ios/**/xcuserdata/
 
+
+# Office temporary lock files
+~$*
+.~$*

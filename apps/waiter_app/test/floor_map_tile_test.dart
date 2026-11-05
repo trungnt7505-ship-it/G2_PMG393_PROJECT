@@ -56,6 +56,7 @@ void main() {
         id: 'session_02',
         tableId: 'table_02',
         tableName: 'Bàn 02',
+        customerId: 'customer_01',
         customerName: 'Nguyễn Văn A',
         openedBy: 'waiter_01',
         openedByRole: 'waiter',
@@ -98,6 +99,18 @@ void main() {
       await tester.pump();
 
       expect(requestReleaseCalled, isTrue);
+
+      final guestSession = SessionModel(
+        id: 'guest_session', tableId: table.id, tableName: table.name,
+        openedBy: 'waiter_01', openedByRole: 'waiter',
+        startedAt: activeSession.startedAt, expiresAt: activeSession.expiresAt,
+      );
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TableTileWidget(
+        table: table, activeSession: guestSession, now: now,
+        onTap: () {}, onRequestRelease: () {},
+      ))));
+      expect(find.text('Quá giờ'), findsOneWidget);
+      expect(find.byKey(const Key('release_table_button')), findsNothing);
     });
   });
 }

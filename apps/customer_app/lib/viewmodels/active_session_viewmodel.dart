@@ -119,11 +119,10 @@ class ActiveSessionViewModel extends StateNotifier<ActiveSessionState> {
   Future<bool> extendSession(String sessionId, String uid) async {
     state = state.copyWith(isActionLoading: true, clearMessages: true);
     try {
-      final addedMinutes =
-          await _repository.extendSession(sessionId, byUid: uid);
+      await _repository.extendSession(sessionId, byUid: uid);
       state = state.copyWith(
         isActionLoading: false,
-        actionSuccess: 'Gia hạn thành công thêm $addedMinutes phút!',
+        actionSuccess: 'Đã gửi yêu cầu gia hạn. Vui lòng chờ nhân viên duyệt.',
       );
       return true;
     } catch (e) {

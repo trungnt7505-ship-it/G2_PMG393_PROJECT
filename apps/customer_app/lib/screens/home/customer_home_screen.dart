@@ -4,6 +4,7 @@ import 'package:core/core.dart';
 import 'package:intl/intl.dart';
 
 import '../../repositories/customer_repository.dart';
+import 'takeaway_screen.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/active_session_viewmodel.dart';
 import '../session/active_session_screen.dart';
@@ -14,6 +15,7 @@ import '../reservation/reservation_booking_screen.dart';
 import '../reservation/my_reservations_screen.dart';
 import '../scanner/table_qr_scanner_screen.dart';
 import '../history/points_and_history_screen.dart';
+import '../../dialogs/edit_contact_dialog.dart';
 
 /// Màn hình chính của Khách hàng (CustomerHomeScreen).
 ///
@@ -30,6 +32,22 @@ class CustomerHomeScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).value;
     final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final activeSessionAsync = ref.watch(activeCustomerSessionProvider);
+    final openRequests = ref.watch(openRequestsProvider);
+
+    // L?ng nghe y�u c?u nh? b�n k? c? khi kh�ch dang ? Trang ch? ho?c t?t m�n h�nh
+    final currentSession = activeSessionAsync.valueOrNull;
+    // Chỉ báo chuông/rung cho khách có tài khoản (bỏ qua khách vãng lai)
+    if (currentSession != null && currentSession.customerId != null && currentSession.customerId!.isNotEmpty) {
+      final releaseReqs = openRequests.valueOrNull?.where((r) => r.sessionId == currentSession.id && r.type == 'release_table') ?? [];
+      for (final req in releaseReqs) {
+        ref.read(alarmServiceProvider).triggerDirectAlert(
+          sessionId: currentSession.id,
+          title: 'Nhân viên yêu cầu nhả bàn!',
+          body: req.message.isNotEmpty ? req.message : 'Vui lòng liên hệ nhân viên để gia hạn hoặc tính tiền.',
+          alertId: req.id,
+        );
+      }
+    }
     // Keep the draft alive while navigating from the home menu to the session.
     ref.watch(activeSessionViewModelProvider);
     final filteredMenuAsync = ref.watch(filteredMenuItemsProvider);
@@ -50,6 +68,19 @@ class CustomerHomeScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Thông tin cá nhân',
+            icon: const Icon(Icons.person_outline),
+            onPressed: user == null ? null : () async {
+              final saved = await showDialog<bool>(context: context,
+                barrierDismissible: false,
+                builder: (_) => EditContactDialog(customer: user));
+              if (saved == true && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đã cập nhật tên và số điện thoại')));
+              }
+            },
+          ),
           IconButton(
             tooltip: 'Lịch sử tích điểm & hóa đơn',
             icon: const Icon(Icons.receipt_long),
@@ -117,9 +148,9 @@ class CustomerHomeScreen extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.qr_code_scanner,
+                  icon: Icons.table_bar,
                   title: 'Check-in bàn',
-                  subtitle: 'Quét mã nhận chỗ',
+                  subtitle: 'Quét QR hoặc nhận bàn nhanh',
                   color: const Color(0xFF2E7D32),
                   onTap: () {
                     Navigator.of(context).push(
@@ -134,6 +165,7 @@ class CustomerHomeScreen extends ConsumerWidget {
           ),
 
           const SizedBox(height: 24),
+          FilledButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TakeawayScreen())), icon: const Icon(Icons.takeout_dining), label: const Text('Đặt món mang đi / Theo dõi đơn')),
 
           // 4. Tiêu đề thực đơn và thanh tìm kiếm
           Row(

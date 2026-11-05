@@ -28,9 +28,21 @@ class PointsAndHistoryScreen extends ConsumerWidget {
         appBar: AppBar(
           title: const Text('Điểm thưởng & Hóa đơn'),
           bottom: const TabBar(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 10),
+            labelPadding: EdgeInsets.symmetric(horizontal: 8),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicator: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
+            dividerColor: Colors.transparent,
+            labelColor: Color(0xFF4E342E),
+            unselectedLabelColor: Colors.white,
+            labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            unselectedLabelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             tabs: [
-              Tab(text: 'Lịch sử điểm'),
-              Tab(text: 'Hóa đơn đã thanh toán'),
+              Tab(height: 44, text: 'Lịch sử điểm'),
+              Tab(height: 44, text: 'Hóa đơn đã thanh toán'),
             ],
           ),
         ),

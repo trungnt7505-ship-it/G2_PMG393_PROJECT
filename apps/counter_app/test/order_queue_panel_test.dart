@@ -16,6 +16,20 @@ class EmptyOrderService extends OrderService {
 }
 
 void main() {
+  testWidgets('Payment filter includes seated customers requesting a bill', (tester) async {
+    final now = DateTime.now();
+    final container = ProviderContainer(overrides: [
+      orderServiceProvider.overrideWithValue(EmptyOrderService()),
+      activeSessionsProvider.overrideWith((ref) => Stream.value([SessionModel(id:'s',tableId:'t',tableName:'Bàn 01',customerName:'Khách A',openedBy:'w',openedByRole:'waiter',startedAt:now,expiresAt:now.add(const Duration(hours:2)),subtotal:50000)])),
+      openRequestsProvider.overrideWith((ref) => Stream.value([RequestModel(id:'r',sessionId:'s',tableId:'t',tableName:'Bàn 01',type:'request_bill',createdBy:'c',createdAt:now)])),
+    ]);
+    addTearDown(container.dispose);
+    container.read(posDashboardViewModelProvider.notifier).filterOrder('Chờ thanh toán');
+    await tester.pumpWidget(UncontrolledProviderScope(container:container,child:const MaterialApp(home:Scaffold(body:OrderQueuePanel()))));
+    await tester.pumpAndSettle();
+    expect(find.text('Bàn 01 · Khách A'),findsOneWidget);
+    expect(find.text('Thu tiền'),findsOneWidget);
+  });
   testWidgets('Empty queue finishes loading and keeps its stream on filter changes',
       (tester) async {
     final service = EmptyOrderService();

@@ -368,10 +368,19 @@ class SessionService {
   Future<int> extendSession(
     String sessionId, {
     required String byUid,
+    String? approvalRequestId,
   }) async {
     final now = ClockService.instance.serverNow;
 
     return await _firestore.runTransaction<int>((transaction) async {
+      final approvalRef = approvalRequestId == null ? null : _firestore.collection('requests').doc(approvalRequestId);
+      Map<String, dynamic>? approval;
+      if (approvalRef != null) {
+        approval = (await transaction.get(approvalRef)).data();
+        if (approval == null || approval['status'] != 'open' || approval['sessionId'] != sessionId || approval['type'] != 'extend_session') {
+          throw StateError('Yêu cầu gia hạn đã được xử lý hoặc không hợp lệ.');
+        }
+      }
       final config = await ConfigService(firestore: _firestore)
           .read(transaction: transaction);
       final sessionRef = _firestore.collection('sessions').doc(sessionId);
@@ -383,6 +392,9 @@ class SessionService {
 
       final session =
           SessionModel.fromMap(sessionSnapshot.data()!, sessionSnapshot.id);
+      if (approval != null && approval['expiresAt'] != sessionSnapshot.data()!['expiresAt']) {
+        throw StateError('Thời hạn phiên đã thay đổi. Vui lòng kiểm tra lại yêu cầu.');
+      }
       if (!session.isActive) {
         throw Exception('Phiên dùng bàn đã kết thúc, không thể gia hạn.');
       }
@@ -428,8 +440,29 @@ class SessionService {
         'expiresAt': Timestamp.fromDate(newExpiresAt),
         'extensions': updatedExtensions.map((e) => e.toMap()).toList(),
       });
+      if (approvalRef != null) transaction.update(approvalRef, {'status': 'done', 'decision': 'approved', 'approvedMinutes': minutesToAdd, 'resolvedBy': byUid, 'resolvedAt': Timestamp.fromDate(now)});
 
       return minutesToAdd;
+    });
+  }
+
+  Future<void> requestExtension(String sessionId, String customerId) async {
+    await _firestore.runTransaction((tx) async {
+      final session = (await tx.get(_firestore.collection('sessions').doc(sessionId))).data();
+      if (session == null || session['customerId'] != customerId || session['status'] != 'active') throw StateError('Phiên không thể xin gia hạn.');
+      final expiry = session['expiresAt'] as Timestamp;
+      final ref = _firestore.collection('requests').doc('extend_${sessionId}_${expiry.millisecondsSinceEpoch}');
+      if ((await tx.get(ref)).exists) throw StateError('Yêu cầu cho thời hạn này đã được gửi. Vui lòng chờ kết quả từ nhân viên.');
+      tx.set(ref, {'sessionId': sessionId, 'tableId': session['tableId'], 'tableName': session['tableName'], 'type': 'extend_session', 'status': 'open', 'createdBy': customerId, 'createdAt': Timestamp.fromDate(ClockService.instance.serverNow), 'expiresAt': expiry, 'message': 'Khách xin gia hạn thời gian sử dụng bàn'});
+    });
+  }
+
+  Future<void> rejectExtension(String requestId, String staffId) async {
+    await _firestore.runTransaction((tx) async {
+      final ref = _firestore.collection('requests').doc(requestId);
+      final data = (await tx.get(ref)).data();
+      if (data == null || data['type'] != 'extend_session' || data['status'] != 'open') throw StateError('Yêu cầu đã được xử lý.');
+      tx.update(ref, {'status': 'done', 'decision': 'rejected', 'resolvedBy': staffId, 'resolvedAt': Timestamp.fromDate(ClockService.instance.serverNow)});
     });
   }
 

@@ -3,6 +3,7 @@
 /// để sử dụng tất cả Constants, Models, Services, Providers, Theme và Widgets.
 
 // Constants
+export 'services/customer_workflow_service.dart';
 export 'constants/app_config.dart';
 export 'constants/enums.dart';
 

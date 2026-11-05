@@ -23,17 +23,19 @@ class WaiterTaskHubScreen extends ConsumerWidget {
     final requestsCount = openRequestsAsync.valueOrNull?.length ?? 0;
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Trung tâm Tác vụ'),
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           bottom: TabBar(
+            isScrollable: true,
             indicatorColor: AppColors.accent,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             tabs: [
+              const Tab(text: 'Món đặt trước'),
               Tab(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -84,6 +86,7 @@ class WaiterTaskHubScreen extends ConsumerWidget {
         ),
         body: TabBarView(
           children: [
+            const _PreorderTasksTab(),
             // Tab 1: Duyệt đơn pending từ khách tự đặt
             _PendingOrdersTab(pendingOrdersAsync: pendingOrdersAsync),
 
@@ -462,6 +465,10 @@ class _OpenRequestsTab extends ConsumerWidget {
             IconData iconData = Icons.notifications;
 
             switch (req.requestType) {
+              case RequestType.extend_session:
+                titleLabel = 'XIN GIA HẠN';
+                iconData = Icons.more_time;
+                break;
               case RequestType.call_waiter:
                 titleLabel = 'GỌI PHỤC VỤ';
                 tagColor = Colors.orange;
@@ -483,6 +490,7 @@ class _OpenRequestsTab extends ConsumerWidget {
                 iconData = Icons.star;
                 break;
             }
+            if (req.type == 'extend_session') titleLabel = 'XIN GIA HẠN';
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
@@ -530,7 +538,18 @@ class _OpenRequestsTab extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    ElevatedButton(
+                    if (req.type == 'extend_session') ...[
+                      TextButton(onPressed: () async {
+                        try {
+                          await ref.read(sessionServiceProvider).rejectExtension(req.id, ref.read(authServiceProvider).currentUid ?? '');
+                        } catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
+                      }, child: const Text('Từ chối')),
+                      FilledButton(onPressed: () async {
+                        try {
+                          await ref.read(sessionServiceProvider).extendSession(req.sessionId, byUid: ref.read(authServiceProvider).currentUid ?? '', approvalRequestId: req.id);
+                        } catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
+                      }, child: const Text('Duyệt')),
+                    ] else ElevatedButton(
                       onPressed: () async {
                         final ok = await taskHubViewModel.resolveRequest(req.id);
                         if (ok && context.mounted) {
@@ -554,4 +573,27 @@ class _OpenRequestsTab extends ConsumerWidget {
       },
     );
   }
+}
+
+class _PreorderTasksTab extends ConsumerWidget {
+  const _PreorderTasksTab();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ref.watch(preorderTasksProvider).when(
+    loading: () => const Center(child: CircularProgressIndicator()),
+    error: (e,_) => Center(child: Text('Không tải được đặt trước: $e')),
+    data: (rows) => rows.isEmpty ? const Center(child: Text('Không có món đặt trước đang chờ khách đến.')) : ListView(children: rows.map((r) {
+      final reservation = ReservationModel.fromMap(r, r['id'] as String);
+      return Card(margin: const EdgeInsets.all(12), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${reservation.customerName} · ${reservation.phone} · ${reservation.tableName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text('Giờ đến: ${DateFormat('dd/MM HH:mm').format(reservation.startTime)}'),
+        ...reservation.preOrderItems.map((i) => Text('${i.qty} × ${i.name} · ${i.selectedOptions.map((o) => o.choiceName).join(', ')} ${i.note ?? ''}')),
+        Text('Tạm tính: ${reservation.preOrderTotal} đ'),
+        const Text('Món sẽ chuyển vào hàng đợi khi khách nhận bàn để tránh tạo đơn trùng.'),
+        FilledButton(onPressed: r['preorderReviewedAt'] != null ? null : () async {
+          try { await ref.read(customerWorkflowServiceProvider).reviewPreorder(reservation.id, ref.read(authServiceProvider).currentUid ?? ''); }
+          catch(e) { if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
+        }, child: Text(r['preorderReviewedAt'] == null ? 'Xác nhận đã tiếp nhận' : 'Đã tiếp nhận')),
+      ])));
+    }).toList()),
+  );
 }

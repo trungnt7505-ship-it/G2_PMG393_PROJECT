@@ -117,7 +117,8 @@ enum RequestType {
   call_waiter,
   request_bill,
   release_table,
-  early_release;
+  early_release,
+  extend_session;
 
   static RequestType fromString(String? value) {
     return RequestType.values.firstWhere(

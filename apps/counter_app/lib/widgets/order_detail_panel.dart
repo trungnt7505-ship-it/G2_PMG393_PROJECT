@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:core/core.dart';
 import '../dialogs/payment_checkout_modal.dart';
+import '../dialogs/table_qr_dialog.dart';
 import '../viewmodels/pos_dashboard_viewmodel.dart';
 
 /// Cột 3: Chi tiết hóa đơn của bàn đang chọn & Thông báo yêu cầu hỗ trợ (Requests).
@@ -128,6 +129,19 @@ class OrderDetailPanel extends ConsumerWidget {
             ],
           ),
           const Divider(height: 20),
+          if (table != null)
+            OutlinedButton.icon(
+              onPressed: table.qrSecret.trim().isEmpty
+                  ? null
+                  : () => showDialog<void>(
+                        context: context,
+                        builder: (_) => TableQrDialog(table: table),
+                      ),
+              icon: const Icon(Icons.qr_code_2),
+              label: Text(table.qrSecret.trim().isEmpty
+                  ? 'Bàn chưa có mã QR'
+                  : 'Hiển thị QR nhận bàn'),
+            ),
 
           // Yêu cầu hỗ trợ từ bàn (Requests)
           if (tableRequests.isNotEmpty) ...[
@@ -162,7 +176,7 @@ class OrderDetailPanel extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              '• ${req.type == 'call_waiter' ? 'Khách gọi phục vụ' : req.type == 'request_bill' ? 'Khách xin tính tiền' : req.type == 'release_table' ? 'Yêu cầu nhả bàn' : 'Trả bàn sớm'}: ${req.message}',
+                              '• ${req.type == 'call_waiter' ? 'Khách gọi phục vụ' : req.type == 'request_bill' ? 'Khách xin tính tiền' : req.type == 'release_table' ? 'Yêu cầu nhả bàn' : req.type == 'extend_session' ? 'Xin gia hạn (Waiter duyệt)' : 'Trả bàn sớm'}: ${req.message}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),

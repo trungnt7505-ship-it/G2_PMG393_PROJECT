@@ -1,3 +1,4 @@
+﻿import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,9 @@ class AlarmService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+  final _alerts = StreamController<SessionAlarm>.broadcast();
+  Stream<SessionAlarm> get alerts => _alerts.stream;
+  final Map<String, DateTime> _expiryBySession = {};
 
   /// Bảng lưu vết các mốc thời gian đã phát chuông/rung của từng bàn.
   /// Cấu trúc: `{sessionId: {15, 5, 0}}`.
@@ -24,7 +28,18 @@ class AlarmService {
   final Map<String, Set<int>> firedBySession = {};
 
   /// Khởi tạo cấu hình kênh thông báo và quyền rung trên thiết bị Android/iOS.
-  Future<void> init() async {
+  void Function(String? payload)? onNotificationTapped;
+  String? _pendingNotification;
+
+  /// Kh?i t?o c?u h�nh k�nh th�ng b�o v� quy?n rung tr�n thi?t b? Android/iOS.
+  Future<void> init({void Function(String? payload)? onSelectNotification}) async {
+    if (onSelectNotification != null) {
+      onNotificationTapped = onSelectNotification;
+      if (_pendingNotification != null) {
+        onNotificationTapped!(_pendingNotification);
+        _pendingNotification = null;
+      }
+    }
     if (_isInitialized) return;
     if (kIsWeb) { _isInitialized = true; return; }
 
@@ -41,8 +56,27 @@ class AlarmService {
       iOS: darwinSettings,
     );
 
-    await _notificationsPlugin.initialize(initSettings);
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (response) {
+        if (response.payload != null && onNotificationTapped != null) {
+          onNotificationTapped!(response.payload);
+        }
+      },
+    );
     await _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    await _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(
+      const AndroidNotificationChannel('table_direct_request_sound', 'Yêu cầu trực tiếp từ nhân viên', importance: Importance.max, playSound: true),
+    );
+    final launch = await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp == true) {
+      final payload = launch?.notificationResponse?.payload;
+      if (onNotificationTapped == null) {
+        _pendingNotification = payload;
+      } else {
+        onNotificationTapped!(payload);
+      }
+    }
     _isInitialized = true;
   }
 
@@ -51,13 +85,16 @@ class AlarmService {
   Future<void> syncAlarmsForSession(SessionModel s,
       {AppConfig config = AppConfig.defaultConfig}) async {
     if (!s.isActive) return;
-    final remainingMinutes =
-        s.expiresAt.difference(ClockService.instance.serverNow).inMinutes;
+    if (_expiryBySession[s.id] != s.expiresAt) {
+      resetSessionAlarms(s.id);
+      _expiryBySession[s.id] = s.expiresAt;
+    }
+    final remaining = s.expiresAt.difference(ClockService.instance.serverNow);
     final thresholds = [...config.warnMinutes]..sort();
-    final threshold = remainingMinutes <= 0
+    final threshold = remaining <= Duration.zero
         ? 0
         : thresholds
-            .where((value) => remainingMinutes <= value)
+            .where((value) => value > 0 && remaining <= Duration(minutes: value))
             .cast<int?>()
             .firstWhere((_) => true, orElse: () => null);
     if (threshold == null) return;
@@ -92,6 +129,8 @@ class AlarmService {
     required String title,
     required String body,
   }) async {
+    // In-app feedback remains available even when notification permission is denied.
+    _alerts.add(SessionAlarm(sessionId: sessionId, title: title, body: body));
     // 1. Rung thiết bị (Vibration)
     try {
       final hasVibrator = await Vibration.hasVibrator();
@@ -111,17 +150,18 @@ class AlarmService {
     // 2. Hiển thị thông báo cục bộ
     try {
       const androidDetails = AndroidNotificationDetails(
-        'table_session_channel',
+        'table_session_sound_v2',
         'Cảnh báo phiên bàn',
         channelDescription: 'Thông báo nhắc nhở xoay vòng bàn Cafe',
         importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
         vibrationPattern: null,
       );
 
       const notificationDetails = NotificationDetails(
         android: androidDetails,
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
       );
 
       final notificationId = (sessionId.hashCode ^ minutesLeft).abs() % 100000;
@@ -130,14 +170,71 @@ class AlarmService {
         title,
         body,
         notificationDetails,
+        payload: sessionId,
       );
     } catch (_) {
       // Bỏ qua lỗi thông báo nếu chưa được cấp quyền
     }
   }
 
+  /// Phát cảnh báo chuông và rung trực tiếp theo yêu cầu (ví dụ: Nhân viên yêu cầu nhả bàn).
+  final Set<String> _handledDirectAlertIds = {};
+
+  Future<void> triggerDirectAlert({
+    required String sessionId,
+    required String title,
+    required String body,
+    String? alertId,
+  }) async {
+    if (alertId != null && !_handledDirectAlertIds.add(alertId)) return;
+    _alerts.add(SessionAlarm(sessionId: sessionId, title: title, body: body));
+
+    // 1. Rung thiết bị 3 nhịp mạnh cảnh báo
+    try {
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator == true) {
+        Vibration.vibrate(pattern: [0, 500, 200, 500, 200, 800]);
+      }
+    } catch (_) {}
+
+    // 2. Phát âm thanh chuông thông báo nổi bật
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'table_direct_request_sound',
+        'Yêu cầu trực tiếp từ nhân viên',
+        channelDescription: 'Thông báo yêu cầu nhả bàn và hỗ trợ',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+      );
+
+      const notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      );
+
+      final notificationId = (sessionId.hashCode ^ 999).abs() % 100000;
+      await _notificationsPlugin.show(
+        notificationId,
+        title,
+        body,
+        notificationDetails,
+        payload: sessionId,
+      );
+    } catch (_) {}
+  }
+
   /// Xóa bộ nhớ cảnh báo của một phiên khi phiên được gia hạn thêm giờ hoặc đóng bàn.
   void resetSessionAlarms(String sessionId) {
     firedBySession.remove(sessionId);
+    _expiryBySession.remove(sessionId);
   }
+}
+
+class SessionAlarm {
+  final String sessionId;
+  final String title;
+  final String body;
+
+  const SessionAlarm({required this.sessionId, required this.title, required this.body});
 }

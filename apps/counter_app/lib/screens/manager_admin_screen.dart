@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:core/core.dart';
 import '../widgets/app_config_form.dart';
 import '../dialogs/saved_invoice_dialog.dart';
+import 'revenue_report_screen.dart';
 
 /// Màn hình Quản lý / Quản trị viên (ManagerAdminScreen):
 /// - Bật/tắt món ăn/nước uống còn hàng (`available`).
@@ -220,6 +221,13 @@ class _ManagerAdminScreenState extends ConsumerState<ManagerAdminScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => const RevenueReportScreen())),
+                icon: const Icon(Icons.bar_chart),
+                label: const Text('Xem doanh thu theo ngày, tuần, tháng'),
+              ),
+              const SizedBox(height: 12),
               // Thống kê trong ngày
               const Text(
                 'Thống kê vận hành trong ngày hôm nay',
