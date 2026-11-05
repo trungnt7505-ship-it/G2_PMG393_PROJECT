@@ -101,3 +101,33 @@ Core: 39 test; customer: 10; counter: 26; waiter: 9 — tổng **84 test pass** 
 - Chống đặt trùng dùng kiểm tra khoảng thời gian và guard phiên bản theo bàn/tài khoản. Các máy phải cùng dùng bản core mới. Dữ liệu trùng cũ không tự hủy. Slot cũ không có bookingStart/bookingEnd được kiểm tra bảo thủ theo từng khoảng 30 phút.
 - Đặt mang đi online và gia hạn qua Waiter duyệt chưa triển khai theo yêu cầu hoãn của người dùng.
 - Phần cứng camera/rung và ba máy vật lý vẫn cần nghiệm thu thực tế. Build web/test phần mềm không thay thế kiểm thử này.
+
+## Bốn luồng bổ sung — 02/11/2026
+
+1. **Gia hạn có duyệt:** Customer gửi yêu cầu `extend_session`; thời gian không đổi khi gửi. Waiter vào Tác vụ → Yêu cầu để duyệt hoặc từ chối. Duyệt kiểm tra lại phiên và lịch đặt kế tiếp, cập nhật thời gian và kết quả yêu cầu trong cùng transaction. Một yêu cầu chỉ được xử lý một lần. Customer xem kết quả trong phiên bàn. Thông báo hiện realtime trong app đang mở, chưa phải push khi đóng app.
+2. **Món đặt trước:** Waiter có tab Món đặt trước, thấy khách, điện thoại, bàn, giờ đến, món/tùy chọn/ghi chú và tổng tiền, xác nhận đã tiếp nhận. Không tạo thêm đơn bếp ở bước tiếp nhận; check-in vẫn tạo đúng đơn theo luồng hiện có.
+3. **Mang đi online:** Customer mở Đặt món mang đi / Theo dõi đơn từ trang chủ. Tên/SĐT lấy từ hồ sơ, có thể sửa cho riêng đơn; chọn nhận sớm nhất hoặc hẹn giờ trong ngày; chọn món và gửi. Nhân viên duyệt và chuẩn bị qua hàng đợi hiện có. Khách theo dõi trạng thái và thanh toán tại quầy. Không có thanh toán ngân hàng online/giao hàng. Đơn lưu snapshot người nhận và mã chống gửi lặp, hóa đơn gắn tài khoản đặt.
+4. **Chờ thanh toán:** Counter hiển thị cả phiên billing hoặc có yêu cầu request_bill đang mở, cùng đơn mang đi ready/served chưa thu tiền. Thu tiền bàn kiểm tra món pending trước và dùng lại giao dịch checkout hiện có.
+
+Kiểm thử mới: yêu cầu gia hạn không tăng giờ trước khi duyệt; không duyệt hai lần; từ chối giữ nguyên giờ; đơn online giữ snapshot/giá menu và không nhân đôi khi gửi lại; tiếp nhận đặt trước không tạo đơn bếp; giao diện Counter có bàn xin hóa đơn. Rules emulator chặn khách tự tăng giờ và tự duyệt yêu cầu.
+
+## Cảnh báo giờ trên giả lập Android — 05/11/2026
+
+- Khi đang mở màn hình Phiên bàn của Customer: hiển thị cảnh báo nổi 10 giây và banner tại các mốc warnMinutes (mặc định 15/5 phút) và khi hết giờ; mỗi mốc chỉ báo một lần cho mỗi hạn phiên.
+- Android dùng kênh thông báo có âm thanh `table_session_sound_v2`. Cấp quyền thông báo, bật âm lượng thông báo của giả lập và loa máy tính, tắt chế độ Không làm phiền để nghe tiếng báo hệ thống. Nếu từ chối quyền, thông báo trong app vẫn hiển thị nhưng âm thanh hệ thống không được bảo đảm.
+- Sau khi gia hạn được duyệt, các mốc cảnh báo được thiết lập lại. Không báo hết giờ khi vẫn còn dưới một phút.
+- Chưa có lập lịch báo động khi đóng app; âm thanh này dành cho Android, chưa bổ sung âm thanh trình duyệt. Customer vẫn cần cấu hình Firebase Android trước khi chạy trên giả lập.
+
+## Firebase Android — 05/11/2026
+
+Cả ba app dùng dự án cafe-73637, chung Authentication và Firestore (default):
+
+| App | Android package | Firebase App ID |
+| --- | --- | --- |
+| Counter | com.cafe.counter_app | 1:881262711524:android:c651fe03c0af3ba09f52f1 |
+| Customer | com.cafe.customer_app | 1:881262711524:android:c522b63f25ecde019f52f1 |
+| Waiter | com.cafe.waiter_app | 1:881262711524:android:5d3bf58f8ec18f589f52f1 |
+
+Mỗi app có android/app/google-services.json và FirebaseOptions.android tương ứng; firebase.json ghi lại mapping. Không sao chép cấu hình Android của Counter sang app khác. Web tiếp tục dùng cấu hình hiện có. Không thay đổi Rules hay dữ liệu khi đăng ký thêm app Android. Đây là cấu hình kết nối; vẫn cần kiểm thử đăng nhập email/mật khẩu, camera và thông báo trên thiết bị. Google Sign-In nếu sử dụng cần đăng ký SHA chứng chỉ ký của máy/build tương ứng.
+
+Kiểm tra cấu hình: package Android, App ID trong google-services.json và FirebaseOptions đã đối chiếu khớp cho cả ba app; flutter analyze không có lỗi. Build debug Customer/Waiter ngày 05/11 bị gián đoạn do tranh chấp khóa cache Gradle với các tiến trình khác; chưa có kết quả APK thành công, chưa kiểm thử thiết bị.

@@ -106,8 +106,9 @@ class CustomerRepository {
   }
 
   /// Gia hạn phiên bàn hiện tại.
-  Future<int> extendSession(String sessionId, {required String byUid}) {
-    return _sessionService.extendSession(sessionId, byUid: byUid);
+  Future<int> extendSession(String sessionId, {required String byUid}) async {
+    await _sessionService.requestExtension(sessionId, byUid);
+    return 0;
   }
 
   /// Yêu cầu xin trả bàn sớm để nhận điểm thưởng `earlyReleaseBonusPoints`.

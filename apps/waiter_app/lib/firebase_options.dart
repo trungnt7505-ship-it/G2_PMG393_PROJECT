@@ -33,7 +33,7 @@ class DefaultFirebaseOptions {
   // Cấu hình Android
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyChHovxhhvvrdYUyNJQBnw1UV9G_1O8_GA',
-    appId: '1:881262711524:android:c651fe03c0af3ba09f52f1',
+    appId: '1:881262711524:android:5d3bf58f8ec18f589f52f1',
     messagingSenderId: '881262711524',
     projectId: 'cafe-73637',
     storageBucket: 'cafe-73637.firebasestorage.app',

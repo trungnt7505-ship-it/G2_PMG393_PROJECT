@@ -19,4 +19,13 @@ r=await commit([{update:doc('sessions/'+scenario,{customerId:'customer',openedBy
 if(r.ok!==(scenario==='valid'))throw Error(scenario+': '+r.status+' '+await r.text());
 console.log('PASS '+scenario+' '+r.status);
 }
+let blocked=await commit([{update:doc('sessions/valid',{expiresAt:new Date(Date.now()+10800000)}),updateMask:{fieldPaths:['expiresAt']}}],token);
+if(blocked.ok)throw Error('Customer bypassed extension approval');
+console.log('PASS customer cannot extend directly '+blocked.status);
+const extension={sessionId:'valid',tableId:'valid',tableName:'Test',type:'extend_session',status:'open',createdBy:'customer',createdAt:new Date()};
+let sent=await commit([{update:doc('requests/extension',extension)}],token);
+if(!sent.ok)throw Error(await sent.text());
+let denied=await commit([{update:doc('requests/extension',{...extension,status:'done',decision:'approved'})}],token);
+if(denied.ok)throw Error('Customer approved own request');
+console.log('PASS customer requests but cannot approve '+denied.status);
 })().catch(e=>{console.error(e);process.exit(1)});

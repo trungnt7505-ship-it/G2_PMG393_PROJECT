@@ -4,6 +4,7 @@ import 'package:core/core.dart';
 import 'package:intl/intl.dart';
 
 import '../../repositories/customer_repository.dart';
+import 'takeaway_screen.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/active_session_viewmodel.dart';
 import '../session/active_session_screen.dart';
@@ -134,6 +135,7 @@ class CustomerHomeScreen extends ConsumerWidget {
           ),
 
           const SizedBox(height: 24),
+          FilledButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TakeawayScreen())), icon: const Icon(Icons.takeout_dining), label: const Text('Đặt món mang đi / Theo dõi đơn')),
 
           // 4. Tiêu đề thực đơn và thanh tìm kiếm
           Row(

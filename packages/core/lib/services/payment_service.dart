@@ -221,8 +221,9 @@ class PaymentService {
       }
       final config = await _readConfig(tx);
       _checkPreview(order.total, config, expectedSubtotal, expectedConfig);
-      final memberUid =
-          customerId == null || customerId.isEmpty ? null : customerId;
+      final memberUid = order.createdByRole == 'customer'
+          ? order.createdBy
+          : customerId == null || customerId.isEmpty ? null : customerId;
       final member = await _readMember(tx, memberUid, pointsUsed);
       final calc = calculatePayment(
           subtotal: order.total, pointsUsed: pointsUsed, config: config);

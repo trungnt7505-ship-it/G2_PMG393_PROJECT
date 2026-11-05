@@ -29,21 +29,36 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
   final _formatter = NumberFormat('#,###', 'vi_VN');
   bool _alarmReady = false;
   Timer? _alarmTicker;
+  StreamSubscription<SessionAlarm>? _alarmSubscription;
+  SessionAlarm? _latestAlarm;
+  DateTime? _observedExpiry;
 
   @override
   void initState() {
     super.initState();
+    _alarmSubscription = ref.read(alarmServiceProvider).alerts.listen((alarm) {
+      if (!mounted || alarm.sessionId != widget.sessionId) return;
+      setState(() => _latestAlarm = alarm);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${alarm.title}\n${alarm.body}'),
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(label: 'Đã hiểu', onPressed: () {}),
+      ));
+    });
     _alarmTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
     ref.read(alarmServiceProvider).init().then((_) {
       if (mounted) setState(() => _alarmReady = true);
-    }).catchError((_) {});
+    }).catchError((_) {
+      if (mounted) setState(() => _alarmReady = true);
+    });
   }
 
   @override
   void dispose() {
     _alarmTicker?.cancel();
+    _alarmSubscription?.cancel();
     super.dispose();
   }
 
@@ -53,6 +68,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
     final ordersAsync = ref.watch(sessionOrdersProvider(widget.sessionId));
     final menuAsync = ref.watch(menuItemsProvider);
     final requests = ref.watch(openRequestsProvider);
+    final extensionRequests = ref.watch(extensionRequestsProvider(widget.sessionId));
     final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final uid = ref.watch(authServiceProvider).currentUid ?? '';
     final sessionState = ref.watch(activeSessionViewModelProvider);
@@ -76,6 +92,10 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
           }
 
           // Đồng bộ báo động trên thiết bị
+          if (_observedExpiry != session.expiresAt) {
+            _observedExpiry = session.expiresAt;
+            _latestAlarm = null;
+          }
           if (_alarmReady) {
             ref.read(alarmServiceProvider).syncAlarmsForSession(session, config: config);
           }
@@ -85,6 +105,12 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
               ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 children: [
+                  if (_latestAlarm != null && session.isActive &&
+                      session.expiresAt.difference(ClockService.instance.serverNow) <=
+                          Duration(minutes: config.warnMinutes.isEmpty ? 0 : config.warnMinutes.reduce((a, b) => a > b ? a : b)))
+                    _buildMessageBanner('${_latestAlarm!.title}\n${_latestAlarm!.body}', isError: true),
+                  ...?extensionRequests.valueOrNull?.map((r) => _buildMessageBanner(
+                    r['status'] == 'open' ? 'Yêu cầu gia hạn: đang chờ nhân viên duyệt.' : r['decision'] == 'approved' ? 'Đã duyệt gia hạn thêm ${r['approvedMinutes']} phút.' : 'Nhân viên đã từ chối gia hạn. Vui lòng liên hệ phục vụ.', isError: r['decision'] == 'rejected')),
                   ...?requests.valueOrNull?.where((r) => r.sessionId == session.id && r.type == 'release_table').map(
                     (r) => _buildMessageBanner('Nhân viên yêu cầu nhả bàn: ${r.message}', isError: true)),
                   if (session.isActive && !session.expiresAt.isAfter(ClockService.instance.serverNow))
@@ -163,7 +189,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                       Expanded(
                         child: _ActionTile(
                           icon: Icons.more_time,
-                          label: 'Gia hạn (+30\')',
+                          label: 'Xin gia hạn',
                           color: const Color(0xFFE65100),
                           isLoading: sessionState.isActionLoading,
                           onTap: session.isActive

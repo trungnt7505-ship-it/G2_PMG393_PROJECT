@@ -26,9 +26,19 @@ class OrderService {
     required String createdBy,
     required String createdByRole,
     OrderType type = OrderType.dine_in,
+    String? recipientName,
+    String? recipientPhone,
+    DateTime? pickupAt,
+    String? clientOrderId,
   }) async {
     if (items.isEmpty) {
       throw Exception('Đơn hàng không có món nào.');
+    }
+    if (type == OrderType.takeaway && createdByRole == 'customer') {
+      if (sessionId != 'takeaway_orders' || recipientName == null || recipientName.trim().isEmpty || recipientPhone == null || recipientPhone.trim().length < 8) {
+        throw StateError('Vui lòng cung cấp tên và số điện thoại nhận đơn mang đi.');
+      }
+      if (pickupAt != null && pickupAt.isBefore(ClockService.instance.serverNow)) throw StateError('Giờ nhận đã qua.');
     }
 
     final now = ClockService.instance.serverNow;
@@ -65,7 +75,8 @@ class OrderService {
           .collection('sessions')
           .doc(sessionId)
           .collection('orders')
-          .doc();
+          .doc(clientOrderId);
+      if (clientOrderId != null && (await transaction.get(orderRef)).exists) return orderRef.id;
 
       final order = OrderModel(
         id: orderRef.id,
@@ -96,7 +107,12 @@ class OrderService {
           'orderRevision': FieldValue.increment(1),
         });
       }
-      transaction.set(orderRef, order.toMap());
+      transaction.set(orderRef, {...order.toMap(),
+        if (type == OrderType.takeaway && createdByRole == 'customer') 'customerId': createdBy,
+        if (recipientName != null) 'recipientName': recipientName,
+        if (recipientPhone != null) 'recipientPhone': recipientPhone,
+        if (pickupAt != null) 'pickupAt': Timestamp.fromDate(pickupAt),
+      });
 
       return orderRef.id;
     });

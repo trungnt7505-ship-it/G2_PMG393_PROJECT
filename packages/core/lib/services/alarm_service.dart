@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,9 @@ class AlarmService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+  final _alerts = StreamController<SessionAlarm>.broadcast();
+  Stream<SessionAlarm> get alerts => _alerts.stream;
+  final Map<String, DateTime> _expiryBySession = {};
 
   /// Bảng lưu vết các mốc thời gian đã phát chuông/rung của từng bàn.
   /// Cấu trúc: `{sessionId: {15, 5, 0}}`.
@@ -51,13 +55,16 @@ class AlarmService {
   Future<void> syncAlarmsForSession(SessionModel s,
       {AppConfig config = AppConfig.defaultConfig}) async {
     if (!s.isActive) return;
-    final remainingMinutes =
-        s.expiresAt.difference(ClockService.instance.serverNow).inMinutes;
+    if (_expiryBySession[s.id] != s.expiresAt) {
+      resetSessionAlarms(s.id);
+      _expiryBySession[s.id] = s.expiresAt;
+    }
+    final remaining = s.expiresAt.difference(ClockService.instance.serverNow);
     final thresholds = [...config.warnMinutes]..sort();
-    final threshold = remainingMinutes <= 0
+    final threshold = remaining <= Duration.zero
         ? 0
         : thresholds
-            .where((value) => remainingMinutes <= value)
+            .where((value) => value > 0 && remaining <= Duration(minutes: value))
             .cast<int?>()
             .firstWhere((_) => true, orElse: () => null);
     if (threshold == null) return;
@@ -92,6 +99,8 @@ class AlarmService {
     required String title,
     required String body,
   }) async {
+    // In-app feedback remains available even when notification permission is denied.
+    _alerts.add(SessionAlarm(sessionId: sessionId, title: title, body: body));
     // 1. Rung thiết bị (Vibration)
     try {
       final hasVibrator = await Vibration.hasVibrator();
@@ -111,17 +120,18 @@ class AlarmService {
     // 2. Hiển thị thông báo cục bộ
     try {
       const androidDetails = AndroidNotificationDetails(
-        'table_session_channel',
+        'table_session_sound_v2',
         'Cảnh báo phiên bàn',
         channelDescription: 'Thông báo nhắc nhở xoay vòng bàn Cafe',
         importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
         vibrationPattern: null,
       );
 
       const notificationDetails = NotificationDetails(
         android: androidDetails,
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
       );
 
       final notificationId = (sessionId.hashCode ^ minutesLeft).abs() % 100000;
@@ -139,5 +149,14 @@ class AlarmService {
   /// Xóa bộ nhớ cảnh báo của một phiên khi phiên được gia hạn thêm giờ hoặc đóng bàn.
   void resetSessionAlarms(String sessionId) {
     firedBySession.remove(sessionId);
+    _expiryBySession.remove(sessionId);
   }
+}
+
+class SessionAlarm {
+  final String sessionId;
+  final String title;
+  final String body;
+
+  const SessionAlarm({required this.sessionId, required this.title, required this.body});
 }

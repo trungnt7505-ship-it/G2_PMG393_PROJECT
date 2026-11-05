@@ -162,7 +162,7 @@ class OrderDetailPanel extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              '• ${req.type == 'call_waiter' ? 'Khách gọi phục vụ' : req.type == 'request_bill' ? 'Khách xin tính tiền' : req.type == 'release_table' ? 'Yêu cầu nhả bàn' : 'Trả bàn sớm'}: ${req.message}',
+                              '• ${req.type == 'call_waiter' ? 'Khách gọi phục vụ' : req.type == 'request_bill' ? 'Khách xin tính tiền' : req.type == 'release_table' ? 'Yêu cầu nhả bàn' : req.type == 'extend_session' ? 'Xin gia hạn (Waiter duyệt)' : 'Trả bàn sớm'}: ${req.message}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
