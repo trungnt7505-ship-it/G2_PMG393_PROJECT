@@ -39,7 +39,8 @@ class TableActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormatter = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+    final currencyFormatter =
+        NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
     final statusColor = AppColors.getStatusColor(displayStatus);
     final statusLabel = AppColors.getStatusLabel(displayStatus);
 
@@ -184,7 +185,8 @@ class TableActionSheet extends StatelessWidget {
                   child: Icon(Icons.play_arrow_rounded, color: Colors.white),
                 ),
                 title: const Text('Mở bàn khách vãng lai'),
-                subtitle: const Text('Tạo phiên bàn mới cho khách chưa đặt trước'),
+                subtitle:
+                    const Text('Tạo phiên bàn mới cho khách chưa đặt trước'),
                 onTap: () {
                   Navigator.pop(context);
                   onOpenWalkIn();
@@ -193,10 +195,12 @@ class TableActionSheet extends StatelessWidget {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: AppColors.statusReservedSoon,
-                  child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
+                  child:
+                      Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
                 ),
                 title: const Text('Check-in hộ khách đặt trước'),
-                subtitle: const Text('Nhập mã đặt chỗ hoặc quét mã QR đặt món trước'),
+                subtitle:
+                    const Text('Nhập mã đặt chỗ hoặc quét mã QR đặt món trước'),
                 onTap: () {
                   Navigator.pop(context);
                   onCheckInReservation();
@@ -211,10 +215,12 @@ class TableActionSheet extends StatelessWidget {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: AppColors.primary,
-                  child: Icon(Icons.restaurant_menu_rounded, color: Colors.white),
+                  child:
+                      Icon(Icons.restaurant_menu_rounded, color: Colors.white),
                 ),
                 title: const Text('Đặt món hộ khách'),
-                subtitle: const Text('Chọn nhanh các món và tùy chọn 1-tay siêu tốc'),
+                subtitle:
+                    const Text('Chọn nhanh các món và tùy chọn 1-tay siêu tốc'),
                 onTap: () {
                   Navigator.pop(context);
                   onQuickOrder();
@@ -226,7 +232,8 @@ class TableActionSheet extends StatelessWidget {
                   child: Icon(Icons.more_time_rounded, color: Colors.white),
                 ),
                 title: const Text('Gia hạn hộ (+30 phút)'),
-                subtitle: const Text('Cộng thêm thời lượng ngồi nếu không vướng lịch kế tiếp'),
+                subtitle: const Text(
+                    'Cộng thêm thời lượng ngồi nếu không vướng lịch kế tiếp'),
                 onTap: () {
                   Navigator.pop(context);
                   onExtendSession();
@@ -238,43 +245,49 @@ class TableActionSheet extends StatelessWidget {
                   child: Icon(Icons.swap_horiz_rounded, color: Colors.white),
                 ),
                 title: const Text('Chuyển sang bàn khác'),
-                subtitle: const Text('Di chuyển phiên hiện tại sang một bàn trống'),
+                subtitle:
+                    const Text('Di chuyển phiên hiện tại sang một bàn trống'),
                 onTap: () {
                   Navigator.pop(context);
                   onSwitchTable();
                 },
               ),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: displayStatus == TableDisplayStatus.overtime
-                      ? AppColors.statusOvertime
-                      : Colors.purple,
-                  child: const Icon(Icons.notifications_active_rounded, color: Colors.white),
-                ),
-                title: Text(
-                  'Yêu cầu nhả bàn',
-                  style: TextStyle(
-                    color: displayStatus == TableDisplayStatus.overtime
-                        ? AppColors.statusOvertime
-                        : AppColors.textPrimary,
-                    fontWeight: displayStatus == TableDisplayStatus.overtime
-                        ? FontWeight.bold
-                        : FontWeight.normal,
+              if (activeSession?.customerId?.trim().isNotEmpty == true)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        displayStatus == TableDisplayStatus.overtime
+                            ? AppColors.statusOvertime
+                            : Colors.purple,
+                    child: const Icon(Icons.notifications_active_rounded,
+                        color: Colors.white),
                   ),
+                  title: Text(
+                    'Yêu cầu nhả bàn',
+                    style: TextStyle(
+                      color: displayStatus == TableDisplayStatus.overtime
+                          ? AppColors.statusOvertime
+                          : AppColors.textPrimary,
+                      fontWeight: displayStatus == TableDisplayStatus.overtime
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  subtitle: const Text(
+                      'Gửi thông báo nhắc khách hết giờ hoặc sắp tới ca sau'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onRequestRelease();
+                  },
                 ),
-                subtitle: const Text('Gửi thông báo nhắc khách hết giờ hoặc sắp tới ca sau'),
-                onTap: () {
-                  Navigator.pop(context);
-                  onRequestRelease();
-                },
-              ),
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Colors.grey,
                   child: Icon(Icons.cancel_outlined, color: Colors.white),
                 ),
                 title: const Text('Hủy phiên mở nhầm'),
-                subtitle: const Text('Đóng phiên và trả bàn về trạng thái trống'),
+                subtitle:
+                    const Text('Đóng phiên và trả bàn về trạng thái trống'),
                 onTap: () {
                   Navigator.pop(context);
                   onCancelSession();
@@ -287,10 +300,12 @@ class TableActionSheet extends StatelessWidget {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: AppColors.statusFree,
-                  child: Icon(Icons.cleaning_services_rounded, color: Colors.white),
+                  child: Icon(Icons.cleaning_services_rounded,
+                      color: Colors.white),
                 ),
                 title: const Text('Đã dọn dẹp xong'),
-                subtitle: const Text('Xác nhận bàn đã được dọn sạch và sẵn sàng đón khách mới'),
+                subtitle: const Text(
+                    'Xác nhận bàn đã được dọn sạch và sẵn sàng đón khách mới'),
                 onTap: () {
                   Navigator.pop(context);
                   onMarkCleaned();

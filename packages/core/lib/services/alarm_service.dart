@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 import 'package:flutter/foundation.dart';
@@ -28,7 +28,18 @@ class AlarmService {
   final Map<String, Set<int>> firedBySession = {};
 
   /// Khởi tạo cấu hình kênh thông báo và quyền rung trên thiết bị Android/iOS.
-  Future<void> init() async {
+  void Function(String? payload)? onNotificationTapped;
+  String? _pendingNotification;
+
+  /// Kh?i t?o c?u h�nh k�nh th�ng b�o v� quy?n rung tr�n thi?t b? Android/iOS.
+  Future<void> init({void Function(String? payload)? onSelectNotification}) async {
+    if (onSelectNotification != null) {
+      onNotificationTapped = onSelectNotification;
+      if (_pendingNotification != null) {
+        onNotificationTapped!(_pendingNotification);
+        _pendingNotification = null;
+      }
+    }
     if (_isInitialized) return;
     if (kIsWeb) { _isInitialized = true; return; }
 
@@ -45,8 +56,27 @@ class AlarmService {
       iOS: darwinSettings,
     );
 
-    await _notificationsPlugin.initialize(initSettings);
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (response) {
+        if (response.payload != null && onNotificationTapped != null) {
+          onNotificationTapped!(response.payload);
+        }
+      },
+    );
     await _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    await _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(
+      const AndroidNotificationChannel('table_direct_request_sound', 'Yêu cầu trực tiếp từ nhân viên', importance: Importance.max, playSound: true),
+    );
+    final launch = await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp == true) {
+      final payload = launch?.notificationResponse?.payload;
+      if (onNotificationTapped == null) {
+        _pendingNotification = payload;
+      } else {
+        onNotificationTapped!(payload);
+      }
+    }
     _isInitialized = true;
   }
 
@@ -140,10 +170,58 @@ class AlarmService {
         title,
         body,
         notificationDetails,
+        payload: sessionId,
       );
     } catch (_) {
       // Bỏ qua lỗi thông báo nếu chưa được cấp quyền
     }
+  }
+
+  /// Phát cảnh báo chuông và rung trực tiếp theo yêu cầu (ví dụ: Nhân viên yêu cầu nhả bàn).
+  final Set<String> _handledDirectAlertIds = {};
+
+  Future<void> triggerDirectAlert({
+    required String sessionId,
+    required String title,
+    required String body,
+    String? alertId,
+  }) async {
+    if (alertId != null && !_handledDirectAlertIds.add(alertId)) return;
+    _alerts.add(SessionAlarm(sessionId: sessionId, title: title, body: body));
+
+    // 1. Rung thiết bị 3 nhịp mạnh cảnh báo
+    try {
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator == true) {
+        Vibration.vibrate(pattern: [0, 500, 200, 500, 200, 800]);
+      }
+    } catch (_) {}
+
+    // 2. Phát âm thanh chuông thông báo nổi bật
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'table_direct_request_sound',
+        'Yêu cầu trực tiếp từ nhân viên',
+        channelDescription: 'Thông báo yêu cầu nhả bàn và hỗ trợ',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+      );
+
+      const notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      );
+
+      final notificationId = (sessionId.hashCode ^ 999).abs() % 100000;
+      await _notificationsPlugin.show(
+        notificationId,
+        title,
+        body,
+        notificationDetails,
+        payload: sessionId,
+      );
+    } catch (_) {}
   }
 
   /// Xóa bộ nhớ cảnh báo của một phiên khi phiên được gia hạn thêm giờ hoặc đóng bàn.

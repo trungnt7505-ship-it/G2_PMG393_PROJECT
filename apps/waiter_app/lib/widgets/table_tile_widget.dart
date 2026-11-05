@@ -185,7 +185,8 @@ class TableTileWidget extends StatelessWidget {
               ],
 
               // Nút bấm "Yêu cầu nhả bàn" hiển thị khi bàn ở trạng thái quá giờ (Overtime)
-              if (isOvertime) ...[
+              if (isOvertime &&
+                  activeSession?.customerId?.trim().isNotEmpty == true) ...[
                 const SizedBox(height: 4),
                 SizedBox(
                   width: double.infinity,

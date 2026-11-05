@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'routing/app_router.dart';
 import 'screens/auth/customer_auth_screen.dart';
 import 'screens/home/customer_home_screen.dart';
+import 'services/customer_push_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,13 @@ Future<void> main() async {
 
   // Khởi tạo dịch vụ chuông báo và rung Haptic cảnh báo sắp hết giờ
   if (!kIsWeb) await AlarmService.instance.init();
+  if (!kIsWeb) {
+    try {
+      await CustomerPushService.instance.init();
+    } catch (error) {
+      debugPrint('Push initialization failed: $error');
+    }
+  }
 
   runApp(const ProviderScope(child: CustomerApp()));
 }
@@ -47,8 +55,15 @@ class CustomerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
+    if (!kIsWeb && userAsync.valueOrNull?.userRole == UserRole.customer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        CustomerPushService.instance.accountReady(userAsync.requireValue!.id);
+        CustomerPushService.instance.openPending();
+      });
+    }
 
     return MaterialApp(
+      navigatorKey: kIsWeb ? null : CustomerPushService.instance.navigatorKey,
       title: 'Cafe Customer',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme.copyWith(

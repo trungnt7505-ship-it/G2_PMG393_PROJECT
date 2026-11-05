@@ -135,7 +135,8 @@ service cloud.firestore {
     // Requests (call_waiter, request_bill, release_table, early_release)
     match /requests/{reqId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (request.resource.data.type != 'extend_session' ||
+      allow create: if isAuthenticated() && (request.resource.data.type != 'release_table' ||
+        (isStaff() && request.resource.data.createdBy == request.auth.uid)) && (request.resource.data.type != 'extend_session' ||
         (request.resource.data.createdBy == request.auth.uid && request.resource.data.status == 'open' &&
          get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.customerId == request.auth.uid &&
          get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.status == 'active'));

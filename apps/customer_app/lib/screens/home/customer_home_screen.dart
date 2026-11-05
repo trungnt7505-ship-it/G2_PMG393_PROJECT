@@ -31,6 +31,21 @@ class CustomerHomeScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).value;
     final config = ref.watch(appConfigProvider).value ?? AppConfig.defaultConfig;
     final activeSessionAsync = ref.watch(activeCustomerSessionProvider);
+    final openRequests = ref.watch(openRequestsProvider);
+
+    // L?ng nghe y�u c?u nh? b�n k? c? khi kh�ch dang ? Trang ch? ho?c t?t m�n h�nh
+    final currentSession = activeSessionAsync.valueOrNull;
+    // Chỉ báo chuông/rung cho khách có tài khoản (bỏ qua khách vãng lai)
+    if (currentSession != null && currentSession.customerId != null && currentSession.customerId!.isNotEmpty) {
+      final releaseReqs = openRequests.valueOrNull?.where((r) => r.sessionId == currentSession.id && r.type == 'release_table') ?? [];
+      for (final req in releaseReqs) {
+        ref.read(alarmServiceProvider).triggerDirectAlert(
+          sessionId: currentSession.id,
+          title: 'Nh�n vi�n y�u c?u nh? b�n!',
+          body: req.message.isNotEmpty ? req.message : 'Nh�n vi�n xin ph�p m?i b?n chu?n b? nh? b�n d? ph?c v? lu?t kh�ch k? ti?p.',
+        );
+      }
+    }
     // Keep the draft alive while navigating from the home menu to the session.
     ref.watch(activeSessionViewModelProvider);
     final filteredMenuAsync = ref.watch(filteredMenuItemsProvider);
@@ -118,9 +133,9 @@ class CustomerHomeScreen extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.qr_code_scanner,
+                  icon: Icons.table_bar,
                   title: 'Check-in bàn',
-                  subtitle: 'Quét mã nhận chỗ',
+                  subtitle: 'Quét QR hoặc nhận bàn nhanh',
                   color: const Color(0xFF2E7D32),
                   onTap: () {
                     Navigator.of(context).push(
