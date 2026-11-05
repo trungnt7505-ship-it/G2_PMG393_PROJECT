@@ -42,8 +42,9 @@ class CustomerHomeScreen extends ConsumerWidget {
       for (final req in releaseReqs) {
         ref.read(alarmServiceProvider).triggerDirectAlert(
           sessionId: currentSession.id,
-          title: 'Nh�n vi�n y�u c?u nh? b�n!',
-          body: req.message.isNotEmpty ? req.message : 'Nh�n vi�n xin ph�p m?i b?n chu?n b? nh? b�n d? ph?c v? lu?t kh�ch k? ti?p.',
+          title: 'Nhân viên yêu cầu nhả bàn!',
+          body: req.message.isNotEmpty ? req.message : 'Vui lòng liên hệ nhân viên để gia hạn hoặc tính tiền.',
+          alertId: req.id,
         );
       }
     }

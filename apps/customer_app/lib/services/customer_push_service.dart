@@ -12,6 +12,52 @@ class CustomerPushService {
   String? _pendingSession;
   bool _opening = false;
   String? _readyUid;
+  final List<SessionAlarm> _foregroundAlerts = [];
+  bool _showingAlert = false;
+
+  Future<void> _showForegroundAlert(SessionAlarm alert) async {
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)
+      return;
+    _foregroundAlerts.add(alert);
+    if (_showingAlert) return;
+    _showingAlert = true;
+    try {
+      while (_foregroundAlerts.isNotEmpty) {
+        final next = _foregroundAlerts.removeAt(0);
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) continue;
+        final session = await FirebaseFirestore.instance
+            .doc('sessions/${next.sessionId}')
+            .get();
+        final context = navigatorKey.currentContext;
+        if (session.data()?['customerId'] != uid ||
+            FirebaseAuth.instance.currentUser?.uid != uid ||
+            context == null ||
+            !context.mounted ||
+            WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)
+          continue;
+        final open = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+                  title: Text(next.title),
+                  content: Text(next.body),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Đã hiểu')),
+                    FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Xem phiên bàn')),
+                  ],
+                ));
+        if (open == true) openSession(next.sessionId);
+      }
+    } catch (error) {
+      debugPrint('Cannot display foreground alert: $error');
+    } finally {
+      _showingAlert = false;
+    }
+  }
 
   Future<void> accountReady(String uid) async {
     if (_readyUid == uid) return;
@@ -28,6 +74,8 @@ class CustomerPushService {
   }
 
   Future<void> init() async {
+    AlarmService.instance.alerts
+        .listen((alert) => unawaited(_showForegroundAlert(alert)));
     await FirebaseMessaging.instance.requestPermission();
     FirebaseMessaging.onMessageOpenedApp.listen(_openMessage);
     FirebaseMessaging.onMessage.listen((message) {

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/core.dart';
@@ -45,23 +45,6 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
         duration: const Duration(seconds: 10),
         action: SnackBarAction(label: 'Đã hiểu', onPressed: () {}),
       ));
-      if (alarm.title.toLowerCase().contains('nhả bàn') || alarm.title.toLowerCase().contains('hết giờ')) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            icon: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 48),
-            title: Text(alarm.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            content: Text(alarm.body, style: const TextStyle(fontSize: 15)),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Đã hiểu'),
-              ),
-            ],
-          ),
-        );
-      }
     });
     _alarmTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
