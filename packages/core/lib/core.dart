@@ -27,6 +27,7 @@ export 'services/payment_service.dart';
 export 'services/alarm_service.dart';
 export 'services/seed_service.dart';
 export 'services/config_service.dart';
+export 'services/customer_workflow_service.dart';
 
 // Providers
 export 'providers/core_providers.dart';
@@ -38,4 +39,3 @@ export 'theme/app_theme.dart';
 // Widgets
 export 'widgets/countdown_timer_widget.dart';
 export 'widgets/status_badge.dart';
-
