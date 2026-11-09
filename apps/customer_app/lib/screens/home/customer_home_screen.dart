@@ -34,7 +34,7 @@ class CustomerHomeScreen extends ConsumerWidget {
     final activeSessionAsync = ref.watch(activeCustomerSessionProvider);
     final openRequests = ref.watch(openRequestsProvider);
 
-    // L?ng nghe y�u c?u nh? b�n k? c? khi kh�ch dang ? Trang ch? ho?c t?t m�n h�nh
+    // Lắng nghe yêu cầu nhả bàn kể cả khi khách đang ở Trang chủ hoặc tắt màn hình
     final currentSession = activeSessionAsync.valueOrNull;
     // Chỉ báo chuông/rung cho khách có tài khoản (bỏ qua khách vãng lai)
     if (currentSession != null && currentSession.customerId != null && currentSession.customerId!.isNotEmpty) {
